@@ -13,16 +13,21 @@
  * JetBrains Mono is used for counters and `<kbd>` only (design-spec 3.9), always at
  * regular weight, so a single static cut is enough.
  *
- * Both subsets were built locally with fonttools `pyftsubset` (not an npm dependency)
- * from the upstream release assets and keep: ASCII, Cyrillic (ru UI copy), the
- * PriorityChip glyphs U+25B2 / U+25A0 / U+25BC (design-spec 3.12), and the Russian
- * typographic punctuation used in copy (» « · – — "..."). Licenses: `Inter-OFL.txt`,
- * `JetBrainsMono-OFL.txt`, both SIL OFL 1.1.
+ * Both subsets were built locally with fonttools (see scripts/subset-fonts.sh for the
+ * exact command and ranges) from the upstream release assets. Coverage differs between
+ * them because they're used for different copy:
+ *   - Inter: ASCII, Cyrillic (ru UI copy), Russian typographic punctuation (» « · – — …),
+ *     the PriorityChip glyphs U+25B2 / U+25A0 / U+25BC (design-spec 3.12), and arrows
+ *     U+2190-2193 (SegmentedControl ←/→, shortcuts sheet ↑/↓).
+ *   - JetBrains Mono: ASCII, middle dot, and arrows U+2190-2193 (the shortcuts sheet
+ *     renders `Ctrl/Cmd+↑` `↓` as `<kbd>`). No Cyrillic or typographic punctuation —
+ *     mono never sets prose.
+ * Licenses: `Inter-OFL.txt`, `JetBrainsMono-OFL.txt`, both SIL OFL 1.1.
  */
 
 @font-face {
   font-family: 'Inter';
-  src: url('../assets/fonts/InterVariable.woff2') format('woff2-variations');
+  src: url('../assets/fonts/InterVariable.woff2') format('woff2');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
