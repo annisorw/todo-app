@@ -30,7 +30,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'storage/error', error })
   }, [])
 
-  useDebouncedPersist(state.tasks, handlePersistError)
+  const persistNow = useDebouncedPersist(state.tasks, handlePersistError)
 
   // Системные часы читаются здесь, на границе: reducer и домен остаются чистыми.
   const addTask = useCallback((draft: TaskDraft) => {
@@ -61,9 +61,18 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'tasks/clearCompleted' })
   }, [])
 
-  const dismissStorageError = useCallback(() => {
-    dispatch({ type: 'storage/error', error: null })
-  }, [])
+  /**
+   * Кнопка «Повторить» в `ErrorBanner` (спека, S9).
+   *
+   * Одно действие на оба исхода: результат записи и есть новое значение
+   * `storageError`. Удалось — там `null`, и баннер гаснет существующим путём.
+   * Не удалось — тот же или новый код отказа, и баннер остаётся. Прятать его
+   * без попытки записи нельзя: человек прочитал «Повторить» и после исчезнувшего
+   * баннера считает, что сохранилось ([FELA-64](/FELA/issues/FELA-64)).
+   */
+  const retryPersist = useCallback(() => {
+    dispatch({ type: 'storage/error', error: persistNow() })
+  }, [persistNow])
 
   const value = useMemo<TaskStoreValue>(
     () => ({
@@ -78,7 +87,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       restoreRemoved,
       moveTask,
       clearCompleted,
-      dismissStorageError,
+      retryPersist,
     }),
     [
       state,
@@ -89,7 +98,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       restoreRemoved,
       moveTask,
       clearCompleted,
-      dismissStorageError,
+      retryPersist,
     ],
   )
 

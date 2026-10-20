@@ -1,9 +1,11 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTasks } from '../test/factories'
 import { blockedError, quotaError, storedItems, storedPayload, stubLocalStorage } from '../test/storage'
 import type { StorageStub } from '../test/storage'
+import { TASKS_STORAGE_KEY } from '../storage/taskStorage'
+import { PERSIST_DEBOUNCE_MS } from '../storage/useDebouncedPersist'
 import { TaskStoreProvider } from '../state/TaskStoreProvider'
 import { ToastProvider } from '../state/ToastProvider'
 import { ErrorBanner } from './ErrorBanner'
@@ -85,15 +87,49 @@ describe('ErrorBanner', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Сохранённые данные повреждены')
   })
 
-  it('dismisses the banner on "Повторить", leaving the app usable', async () => {
+  /**
+   * [FELA-64](/FELA/issues/FELA-64): the button writes. Quota frees up between
+   * the failed debounced write and the click, so the retry lands and the banner
+   * goes away because storage is healthy again — not because it was dismissed.
+   */
+  it('writes the list on "Повторить" and closes once the write lands', () => {
     setup()
-    const user = userEvent.setup()
+    vi.useFakeTimers()
+    stub = stubLocalStorage({ items: storedItems(storedPayload(makeTasks(2))) })
+    stub.setItem.mockImplementationOnce(() => {
+      throw quotaError()
+    })
+    renderBanner()
+
+    act(() => {
+      vi.advanceTimersByTime(PERSIST_DEBOUNCE_MS)
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('Место в хранилище браузера закончилось')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить' }))
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // Два обращения: упавший проход персиста и удавшаяся запись по нажатию.
+    expect(stub.setItem).toHaveBeenCalledTimes(2)
+    expect(stub.setItem).toHaveBeenLastCalledWith(TASKS_STORAGE_KEY, expect.any(String))
+    const raw = stub.items.get(TASKS_STORAGE_KEY) ?? ''
+    expect(JSON.parse(raw)).toEqual({ version: 1, tasks: makeTasks(2) })
+  })
+
+  /**
+   * The defect this ticket fixes: the old handler was `dismissStorageError`, so
+   * the banner vanished with nothing written. Put that back and this test reds.
+   */
+  it('keeps the banner up when the retry write fails too', () => {
+    setup()
+    vi.useFakeTimers()
     stub = stubLocalStorage({ accessError: blockedError() })
     renderBanner()
 
-    await user.click(screen.getByRole('button', { name: 'Повторить' }))
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить' }))
 
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Браузер заблокировал локальное хранилище')
   })
 
   it('exports the current in-memory tasks as JSON when a write is blocked', async () => {
