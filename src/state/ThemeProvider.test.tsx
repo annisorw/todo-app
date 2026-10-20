@@ -161,22 +161,21 @@ describe('the inline bootstrap script', () => {
    * The script in index.html runs before the bundle, so it cannot import
    * THEME_STORAGE_KEY. This is the guard against the two drifting apart.
    */
-  const html = indexHtml
 
   it('reads the same storage key as the provider', () => {
-    expect(html).toContain(`localStorage.getItem('${THEME_STORAGE_KEY}')`)
+    expect(indexHtml).toContain(`localStorage.getItem('${THEME_STORAGE_KEY}')`)
   })
 
   it('sets data-theme before the module script loads', () => {
-    const bootstrapAt = html.indexOf('document.documentElement.dataset.theme')
-    const moduleAt = html.indexOf('src="/src/main.tsx"')
+    const bootstrapAt = indexHtml.indexOf('document.documentElement.dataset.theme')
+    const moduleAt = indexHtml.indexOf('src="/src/main.tsx"')
 
     expect(bootstrapAt).toBeGreaterThan(-1)
     expect(bootstrapAt).toBeLessThan(moduleAt)
   })
 
   it('resolves the theme the same way the provider does', () => {
-    expect(html).toContain("stored === 'light' || stored === 'dark'")
-    expect(html).toContain("window.matchMedia('(prefers-color-scheme: light)')")
+    expect(indexHtml).toContain("stored === 'light' || stored === 'dark'")
+    expect(indexHtml).toContain("window.matchMedia('(prefers-color-scheme: light)')")
   })
 })

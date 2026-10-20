@@ -1,26 +1,9 @@
 {
+  "extends": "./tsconfig.app.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tokens-test.tsbuildinfo",
-    "target": "es2023",
-    "lib": ["ES2023"],
-    "module": "esnext",
-    "types": ["node"],
-    "skipLibCheck": true,
-
-    /* Bundler mode */
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "moduleDetection": "force",
-    "noEmit": true,
-
-    /* Linting */
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "types": ["node"]
   },
-  "include": ["src/styles/tokens.test.ts"]
+  "include": ["src/styles/tokens.test.ts"],
+  "exclude": []
 }
