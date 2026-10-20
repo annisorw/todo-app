@@ -1,8 +1,10 @@
 name: Deploy to GitHub Pages
 
+# Manual trigger only, on purpose. Publishing the demo is task FELA-25, owned by
+# DevOps and blocked by the QA run (FELA-22) so that an unverified build never
+# reaches a public URL. DevOps re-enables the push trigger in that task once QA
+# has signed off; until then the workflow is run on demand.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

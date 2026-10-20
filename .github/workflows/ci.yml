@@ -97,9 +97,20 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: No inline scripts in build
+      - name: No unexpected inline scripts in build
         run: |
-          if grep -o '<script[^>]*>' dist/index.html | grep -qv ' src='; then
-            echo 'Inline <script> in dist/index.html breaks CSP script-src self'
+          # Exactly one inline script is allowed: the theme bootstrap that sets
+          # data-theme before first paint (design spec acceptance criterion 2,
+          # docs/ARCHITECTURE.md section 6). It must carry data-theme-bootstrap so
+          # that it is visible both in review and here. Anything else inline fails.
+          inline=$(grep -o '<script[^>]*>' dist/index.html | grep -v ' src=' | wc -l)
+          tagged=$(grep -o '<script[^>]*>' dist/index.html | grep -v ' src=' | grep -c 'data-theme-bootstrap' || true)
+          if [ "$inline" -ne "$tagged" ]; then
+            echo "Unexpected inline <script> in dist/index.html: $inline inline, $tagged tagged data-theme-bootstrap"
+            echo 'Inline script breaks CSP script-src self. Tag the theme bootstrap, or move the code into the bundle.'
+            exit 1
+          fi
+          if [ "$tagged" -gt 1 ]; then
+            echo "Found $tagged data-theme-bootstrap scripts; there must be exactly one"
             exit 1
           fi

@@ -69,13 +69,17 @@ Do not build a `RegExp` from a user query. Search by substring and cap the query
 
 `localStorage` is readable and writable by any JavaScript on the same origin, and the demo
 origin `annisorw.github.io` is shared with every other Pages project of the account. The
-`todo-app:` key prefix is name hygiene, not isolation.
+key name is hygiene, not isolation.
 
-- `JSON.parse(raw) as Todo[]` is a lie to the compiler — `as` checks nothing. Parse with a
+Keys are `aurora.tasks.v1` (payload `{ "version": 1, "tasks": Task[] }`) and `aurora.theme`
+— see `docs/ARCHITECTURE.md` section 5, which is authoritative for key names and payload
+shape. The `todo-app:` prefix of the scaffold placeholder is gone.
+
+- `JSON.parse(raw) as Task[]` is a lie to the compiler — `as` checks nothing. Parse with a
   validating parser that rebuilds each object from known fields and drops invalid entries.
-- Cap title length (500 characters) and item count (1000). Define both limits once, in a
-  single module, and import them in the parser, the writer and the input `maxLength`. Two
-  copies of the same number will drift.
+- Cap title length (500 characters) and item count (1000). Both limits are defined once, in
+  the storage module owned by FELA-11, and imported by the parser, the writer and the input
+  `maxLength`. Two copies of the same number will drift.
 - Wrap writes in `try`/`catch` and handle `QuotaExceededError`. Never let a full quota crash
   the app.
 - Regression tests are mandatory for: broken JSON, non-array payload, item with missing
