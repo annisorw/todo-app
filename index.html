@@ -1,10 +1,35 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Todo App</title>
+    <!--
+      Sets data-theme before the first paint, so a light-theme user never sees a
+      dark frame and vice versa (design-spec, acceptance criterion 2). Static
+      inline code on purpose: no eval, no external source, no bundler needed.
+      The storage key mirrors THEME_STORAGE_KEY in src/state/ThemeContext.ts.
+
+      data-theme-bootstrap is what the CI inline-script gate allows through: it
+      permits exactly this one tagged script and fails the build on any other.
+    -->
+    <script data-theme-bootstrap>
+      (function () {
+        var theme = 'dark'
+        try {
+          var stored = localStorage.getItem('aurora.theme')
+          if (stored === 'light' || stored === 'dark') {
+            theme = stored
+          } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+            theme = 'light'
+          }
+        } catch (error) {
+          // Blocked storage or no matchMedia: fall back to the default theme.
+        }
+        document.documentElement.dataset.theme = theme
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

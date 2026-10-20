@@ -1,0 +1,12 @@
+/* The only stylesheet the app entry point imports. Order matters: Tailwind first
+ * (Preflight + utilities), then the tokens it reads, then the base layer that
+ * consumes them. */
+@import 'tailwindcss';
+@import './tokens.css';
+@import './base.css';
+
+/* Tailwind's automatic source detection also scans Markdown, so every class name
+ * quoted in docs/ becomes a real utility — including `bg-[#17172A]`, which the
+ * spec and the architecture doc cite as the counter-example of a hardcoded
+ * colour. Keeping docs out of the scan keeps that hex out of the bundle. */
+@source not "../../docs";
