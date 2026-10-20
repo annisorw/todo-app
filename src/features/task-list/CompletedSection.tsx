@@ -8,6 +8,15 @@ import { useRovingFocus } from './useRovingFocus'
 
 export interface CompletedSectionProps {
   completed: Task[]
+  /**
+   * Count of *all* completed tasks in the store, regardless of the active
+   * search query. `onClearCompleted` always clears every completed task,
+   * not just the ones `completed` (filtered by `query`) happens to show —
+   * the dialog must quote the number it's actually about to delete
+   * (TechLead review on PR #47: showing the filtered count while deleting
+   * everything was a silent-data-loss bug).
+   */
+  totalCompletedCount: number
   query: string
   todayKey: string
   editingId: string | null
@@ -35,6 +44,7 @@ export interface CompletedSectionProps {
  */
 export function CompletedSection({
   completed,
+  totalCompletedCount,
   query,
   todayKey,
   editingId,
@@ -68,7 +78,7 @@ export function CompletedSection({
 
       <ConfirmDialog
         open={confirmOpen}
-        completedCount={completed.length}
+        completedCount={totalCompletedCount}
         onConfirm={handleConfirm}
         onCancel={() => setConfirmOpen(false)}
       />

@@ -420,6 +420,57 @@ describe('TaskList', () => {
 
       expect(screen.getByText('Готовая')).toBeInTheDocument()
     })
+
+    it('under an active search filter, names and clears every completed task, not just the visible ones', async () => {
+      // TechLead review on PR #47: with a query active, the dialog quoted
+      // the filtered count (1) and the button said "Удалить 1 задачу", but
+      // confirming dispatched the store's unfiltered `clearCompleted` and
+      // silently wiped all 4 completed tasks. The dialog must name — and
+      // the confirm button must clear — the real total. Persistence is
+      // debounced (`useDebouncedPersist`), so this reads the live store via
+      // a sibling probe rather than racing `localStorage`.
+      function Probe() {
+        const { tasks } = useTaskStore()
+        return <span data-testid="store-task-ids">{tasks.map((task) => task.id).join(',')}</span>
+      }
+
+      const user = userEvent.setup()
+      seed([
+        makeTask({ id: 't1', title: 'Активная' }),
+        makeTask({ id: 't2', title: 'Купить молоко', completedAt: '2026-10-20T10:00:00.000Z' }),
+        makeTask({ id: 't3', title: 'Купить хлеб', completedAt: '2026-10-20T10:01:00.000Z' }),
+        makeTask({ id: 't4', title: 'Сдать отчёт', completedAt: '2026-10-20T10:02:00.000Z' }),
+        makeTask({ id: 't5', title: 'Помыть окна', completedAt: '2026-10-20T10:03:00.000Z' }),
+      ])
+      render(
+        <TaskStoreProvider>
+          <ToastProvider>
+            <LiveRegion />
+            <Harness query="молоко" />
+            <Probe />
+          </ToastProvider>
+        </TaskStoreProvider>,
+      )
+
+      // Only one completed row matches the query (its title is split by
+      // the <mark> highlight, so match on the row's checkbox label instead).
+      expect(screen.getByRole('checkbox', { name: 'Купить молоко' })).toBeInTheDocument()
+      expect(screen.queryByText('Купить хлеб')).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Удалить все выполненные' }))
+
+      // ...but the dialog must quote the real total, not the filtered one.
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveTextContent('Удалить все выполненные (4)?')
+
+      await user.click(screen.getByRole('button', { name: /Удалить 4 задачи/ }))
+
+      expect(screen.queryByRole('heading', { name: 'Выполнено' })).not.toBeInTheDocument()
+      // Every completed task is gone — including the three the search
+      // query was hiding, not just the one visible row — and the one
+      // active task is untouched.
+      expect(screen.getByTestId('store-task-ids')).toHaveTextContent('t1')
+    })
   })
 
   describe('search highlighting', () => {

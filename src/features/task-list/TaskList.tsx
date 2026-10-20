@@ -38,7 +38,7 @@ export interface TaskListProps {
  * only this transient display list reorders, and only for ≤600ms.
  */
 export function TaskList({ view, query, filter, panelId, activeTabId }: TaskListProps) {
-  const { toggleTask, editTask, removeTask, restoreRemoved, clearCompleted, lastRemoved } = useTaskStore()
+  const { tasks, toggleTask, editTask, removeTask, restoreRemoved, clearCompleted, lastRemoved } = useTaskStore()
   const { pushToast } = useToast()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [settling, setSettling] = useState<Record<string, Task>>({})
@@ -166,6 +166,7 @@ export function TaskList({ view, query, filter, panelId, activeTabId }: TaskList
 
       <CompletedSection
         completed={displayCompleted}
+        totalCompletedCount={tasks.filter(isDone).length}
         query={query}
         todayKey={todayKey}
         editingId={editingId}
