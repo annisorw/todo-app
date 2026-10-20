@@ -54,6 +54,12 @@ describe('Button', () => {
     expect(button).toHaveAttribute('aria-busy', 'true')
   })
 
+  it('gives size="sm" a 44px touch target on mobile that steps down to 32px from sm', () => {
+    render(<Button size="sm">Save</Button>)
+    const button = screen.getByRole('button', { name: 'Save' })
+    expect(button).toHaveClass('h-11', 'sm:h-8')
+  })
+
   it('keeps the same icon-slot markup whether or not it is loading, so the button width never changes', () => {
     const { rerender } = render(<Button>Save</Button>)
     const idleSlotCount = screen.getByRole('button').children.length

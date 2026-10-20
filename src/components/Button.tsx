@@ -12,9 +12,9 @@ export interface ButtonProps extends ComponentProps<'button'> {
   loading?: boolean
 }
 
-/** design-spec 3.5 — sm 32 / md 40 / lg 48. */
+/** design-spec 3.5 / 7 — sm 44 px on mobile, 32 px from the `sm` breakpoint up (see IconButton); md 40 / lg 48. */
 const SIZE_CLASSES: Record<ButtonSize, string> = {
-  sm: 'h-8 px-3',
+  sm: 'h-11 px-3 sm:h-8',
   md: 'h-10 px-4',
   lg: 'h-12 px-5',
 }
