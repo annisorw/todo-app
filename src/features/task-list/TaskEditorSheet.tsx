@@ -109,7 +109,7 @@ export function TaskEditorSheet({ task, onSave, onCancel }: TaskEditorSheetProps
           aria-invalid={form.isTooLong || undefined}
           onChange={(event) => form.setTitle(event.target.value)}
           onKeyDown={form.handleTextareaKeyDown}
-          className="min-w-0 resize-none rounded-(--radius-md) border border-surface-border bg-surface-1 p-(--space-3) text-body text-primary focus:outline-none"
+          className="min-w-0 resize-none rounded-(--radius-md) border border-surface-border bg-surface-1 p-(--space-3) text-body text-primary"
         />
 
         <div className="flex items-center justify-between gap-(--space-3)">

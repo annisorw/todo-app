@@ -4,6 +4,7 @@ import { toDateKey } from '../../domain/dueDate'
 import type { Filter, TaskView } from '../../domain/filters'
 import { isDone } from '../../domain/task'
 import type { Task, TaskPatch } from '../../domain/task'
+import { useToast } from '../../state/ToastProvider'
 import { useTaskStore } from '../../state/useTaskStore'
 import { CompletedSection } from './CompletedSection'
 import { TaskRow } from './TaskRow'
@@ -37,7 +38,8 @@ export interface TaskListProps {
  * only this transient display list reorders, and only for ≤600ms.
  */
 export function TaskList({ view, query, filter, panelId, activeTabId }: TaskListProps) {
-  const { toggleTask, editTask, removeTask, clearCompleted } = useTaskStore()
+  const { toggleTask, editTask, removeTask, restoreRemoved, clearCompleted } = useTaskStore()
+  const { pushToast } = useToast()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [settling, setSettling] = useState<Record<string, Task>>({})
   const settleTimers = useRef<Record<string, number>>({})
@@ -93,9 +95,15 @@ export function TaskList({ view, query, filter, panelId, activeTabId }: TaskList
     setEditingId(null)
   }
 
-  function handleRemove(id: string) {
-    if (editingId === id) setEditingId(null)
-    removeTask(id)
+  function handleRemove(task: Task) {
+    if (editingId === task.id) setEditingId(null)
+    removeTask(task.id)
+    pushToast({
+      variant: 'danger',
+      message: `Задача удалена: «${task.title}»`,
+      actionLabel: 'Вернуть',
+      onAction: restoreRemoved,
+    })
   }
 
   return (
@@ -126,7 +134,7 @@ export function TaskList({ view, query, filter, panelId, activeTabId }: TaskList
                 onOpenEditor={() => setEditingId(task.id)}
                 onCloseEditor={() => setEditingId(null)}
                 onSave={(patch) => handleSave(task.id, patch)}
-                onRemove={() => handleRemove(task.id)}
+                onRemove={() => handleRemove(task)}
                 onQuickChange={(patch) => editTask(task.id, patch)}
               />
             ))}

@@ -6,6 +6,7 @@ import type { Filter } from '../../domain/filters'
 import { selectTaskView } from '../../domain/filters'
 import type { Task } from '../../domain/task'
 import { TaskStoreProvider } from '../../state/TaskStoreProvider'
+import { ToastProvider } from '../../state/ToastProvider'
 import { useTaskStore } from '../../state/useTaskStore'
 import { TASKS_SCHEMA_VERSION, TASKS_STORAGE_KEY } from '../../storage/taskStorage'
 import { makeTask } from '../../test/factories'
@@ -26,8 +27,10 @@ function renderTaskList(tasks: Task[], options?: { filter?: Filter; query?: stri
   seed(tasks)
   return render(
     <TaskStoreProvider>
-      <LiveRegion />
-      <Harness filter={options?.filter} query={options?.query} />
+      <ToastProvider>
+        <LiveRegion />
+        <Harness filter={options?.filter} query={options?.query} />
+      </ToastProvider>
     </TaskStoreProvider>,
   )
 }
@@ -305,7 +308,7 @@ describe('TaskList', () => {
       stubMatchMedia(true)
     })
 
-    it('"Удалить все выполненные" clears every completed task', async () => {
+    it('"Удалить все выполненные" asks for confirmation, naming the count, before clearing', async () => {
       const user = userEvent.setup()
       renderTaskList([
         makeTask({ id: 't1', title: 'Активная' }),
@@ -314,8 +317,25 @@ describe('TaskList', () => {
 
       await user.click(screen.getByRole('button', { name: 'Удалить все выполненные' }))
 
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveTextContent('Удалить все выполненные (1)?')
+      // Still there until confirmed.
+      expect(screen.getByText('Готовая')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /Удалить 1 задачу/ }))
+
       expect(screen.queryByText('Готовая')).not.toBeInTheDocument()
       expect(screen.getByText('Активная')).toBeInTheDocument()
+    })
+
+    it('"Отмена" in the confirmation dialog leaves completed tasks untouched', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Готовая', completedAt: '2026-10-20T10:00:00.000Z' })])
+
+      await user.click(screen.getByRole('button', { name: 'Удалить все выполненные' }))
+      await user.click(screen.getByRole('button', { name: 'Отмена' }))
+
+      expect(screen.getByText('Готовая')).toBeInTheDocument()
     })
   })
 
@@ -353,6 +373,27 @@ describe('TaskList', () => {
       renderTaskList([makeTask({ id: 't1', title: 'Без деталей', priority: 'none', dueDate: null })])
 
       expect(screen.getByRole('checkbox', { name: 'Без деталей' })).toBeInTheDocument()
+    })
+  })
+
+  describe('deleting a task (design-spec S7)', () => {
+    beforeEach(() => {
+      stubMatchMedia(true)
+    })
+
+    it('removing a task via the row menu shows an undo toast naming it, and "Вернуть" restores it', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      await user.click(screen.getByRole('button', { name: /Действия с задачей/ }))
+      await user.click(screen.getByRole('menuitem', { name: 'Удалить' }))
+
+      expect(screen.queryByText('Купить молоко')).not.toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent('Задача удалена: «Купить молоко»')
+
+      await user.click(screen.getByRole('button', { name: 'Вернуть' }))
+
+      expect(screen.getByText('Купить молоко')).toBeInTheDocument()
     })
   })
 

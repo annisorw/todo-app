@@ -7,6 +7,7 @@ import { MAX_TITLE_LENGTH } from '../../domain/limits'
 import type { Task, TaskPatch } from '../../domain/task'
 import { cn } from '../../lib/cn'
 import { useDismissable } from '../../lib/useDismissable'
+import { useOutsideClick } from '../../lib/useOutsideClick'
 import { useTaskEditorForm } from './useTaskEditorForm'
 
 export interface TaskEditorProps {
@@ -24,9 +25,9 @@ export interface TaskEditorProps {
  * this component sets up no `document` listener of its own for Esc.
  * `useDismissable` puts it on the shared dismiss stack (`lib/dismissStack.ts`)
  * — Esc here means **cancel**. A click outside instead *saves* (Postel's
- * Law, design-spec 3.11a), which is a plain local `pointerdown` check
- * rather than `usePopoverDismiss` — that hook always cancels/closes on an
- * outside click, the wrong verb here.
+ * Law, design-spec 3.11a): `useOutsideClick` is reused for the detection
+ * (FELA-63), but its callback is `handleSave`, not a close/cancel — the only
+ * caller in the app where "outside" means something other than dismiss.
  *
  * Focus return to the row's checkbox is **not** done here via
  * `useDismissable`'s `returnFocusTo`: the checkbox unmounts the moment this
@@ -57,15 +58,7 @@ export function TaskEditor({ task, onSave, onCancel }: TaskEditorProps) {
     node.style.height = `${String(node.scrollHeight)}px`
   }, [form.title])
 
-  useEffect(() => {
-    function handlePointerDown(event: PointerEvent) {
-      if (rootRef.current?.contains(event.target as Node)) return
-      form.handleSave()
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown)
-    return () => document.removeEventListener('pointerdown', handlePointerDown)
-  }, [form])
+  useOutsideClick({ onOutsideClick: form.handleSave, inside: [rootRef] })
 
   // Soft Tab trap (design-spec section 7): the sequence is textarea ->
   // priority chip -> due-date chip -> Сохранить -> Отмена, and it never
@@ -96,7 +89,7 @@ export function TaskEditor({ task, onSave, onCancel }: TaskEditorProps) {
         aria-invalid={form.isTooLong || undefined}
         onChange={(event) => form.setTitle(event.target.value)}
         onKeyDown={form.handleTextareaKeyDown}
-        className="min-w-0 resize-none bg-transparent text-body text-primary focus:outline-none"
+        className="min-w-0 resize-none bg-transparent text-body text-primary"
       />
 
       <div className="flex flex-wrap items-center gap-(--space-3)">

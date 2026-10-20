@@ -1,5 +1,7 @@
 import { AnimatePresence } from 'framer-motion'
+import { useState } from 'react'
 import { Button } from '../../components/Button'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import type { Task, TaskPatch } from '../../domain/task'
 import { TaskRow } from './TaskRow'
 import { useRovingFocus } from './useRovingFocus'
@@ -13,7 +15,7 @@ export interface CompletedSectionProps {
   onOpenEditor: (id: string) => void
   onCloseEditor: () => void
   onSave: (id: string, patch: TaskPatch) => void
-  onRemove: (id: string) => void
+  onRemove: (task: Task) => void
   onQuickChange: (id: string, patch: TaskPatch) => void
   onClearCompleted: () => void
 }
@@ -26,10 +28,10 @@ export interface CompletedSectionProps {
  * секция «Выполнено»" are two separate stops), via its own
  * `useRovingFocus` instance — not a continuation of the active list's.
  *
- * "Удалить все выполненные" is the call only — the confirmation dialog is
- * [FELA-18](/FELA/issues/FELA-18), not yet merged, so there is nothing to
- * render here but the action itself (this issue's own text: "сам диалог
- * делает FELA-18, здесь — вызов").
+ * "Удалить все выполненные" opens `ConfirmDialog` (design-spec 3.16): the
+ * issue's own text only asked for the call because [FELA-18](/FELA/issues/FELA-18)
+ * wasn't merged yet when this was written, but the dialog exists now, and a
+ * bare irreversible bulk delete isn't the right call once it does.
  */
 export function CompletedSection({
   completed,
@@ -46,17 +48,30 @@ export function CompletedSection({
 }: CompletedSectionProps) {
   const ids = completed.map((task) => task.id)
   const roving = useRovingFocus(ids)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   if (completed.length === 0) return null
+
+  function handleConfirm() {
+    onClearCompleted()
+    setConfirmOpen(false)
+  }
 
   return (
     <section aria-label="Выполнено" className="mt-(--space-8) flex flex-col gap-(--space-3)">
       <div className="flex items-center justify-between">
         <h2 className="text-h2 text-primary">Выполнено</h2>
-        <Button variant="ghost" size="sm" onClick={onClearCompleted}>
+        <Button variant="ghost" size="sm" onClick={() => setConfirmOpen(true)}>
           Удалить все выполненные
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        completedCount={completed.length}
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirmOpen(false)}
+      />
 
       <ul className="flex flex-col gap-(--space-1)">
         <AnimatePresence initial={false}>
@@ -75,7 +90,7 @@ export function CompletedSection({
               onOpenEditor={() => onOpenEditor(task.id)}
               onCloseEditor={onCloseEditor}
               onSave={(patch) => onSave(task.id, patch)}
-              onRemove={() => onRemove(task.id)}
+              onRemove={() => onRemove(task)}
               onQuickChange={(patch) => onQuickChange(task.id, patch)}
             />
           ))}
