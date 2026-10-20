@@ -1,19 +1,12 @@
 import { SegmentedControl } from '../../components/SegmentedControl'
 import type { Filter, TaskCounts } from '../../domain/filters'
+import { FILTER_LABELS, FILTER_ORDER } from './filterLabels'
 
 export interface FilterTabsProps {
   filter: Filter
   counts: TaskCounts
   onFilterChange: (filter: Filter) => void
 }
-
-export const FILTER_LABELS: Record<Filter, string> = {
-  all: 'Все',
-  active: 'Активные',
-  completed: 'Готовые',
-}
-
-const FILTER_ORDER: Filter[] = ['all', 'active', 'completed']
 
 /** Design-spec 3.9 — binds the three fixed filters to `SegmentedControl`. */
 export function FilterTabs({ filter, counts, onFilterChange }: FilterTabsProps) {

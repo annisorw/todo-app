@@ -5,7 +5,8 @@ import { useDebouncedValue } from '../../lib/useDebouncedValue'
 import { selectTaskView } from '../../domain/filters'
 import type { Filter, TaskView } from '../../domain/filters'
 import { useTaskStore } from '../../state/useTaskStore'
-import { FILTER_LABELS, FilterTabs } from './FilterTabs'
+import { FILTER_LABELS } from './filterLabels'
+import { FilterTabs } from './FilterTabs'
 import { SearchField } from './SearchField'
 import { useStickyBand } from './useStickyBand'
 
@@ -60,12 +61,12 @@ export const Toolbar = forwardRef<HTMLInputElement, ToolbarProps>(function Toolb
     [tasks, filter, debouncedQuery],
   )
 
-  const hasMountedRef = useRef(false)
+  const lastAnnouncedRef = useRef<{ filter: Filter; query: string } | null>(null)
   useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true
-      return
-    }
+    const previous = lastAnnouncedRef.current
+    lastAnnouncedRef.current = { filter, query: debouncedQuery }
+    if (previous === null) return
+    if (previous.filter === filter && previous.query === debouncedQuery) return
 
     const visibleCount = view.counts[filter]
     const word = pluralizeTasks(visibleCount)

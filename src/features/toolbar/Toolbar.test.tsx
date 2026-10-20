@@ -138,6 +138,24 @@ describe('Toolbar', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Готовые: 1 задача')
   })
 
+  it('does not announce when the task list changes without user interaction', () => {
+    const tasks = [makeTask({ id: 't1' })]
+    const { rerender } = renderToolbar(tasks)
+
+    const tasksWithUnrelatedAdd = [...tasks, makeTask({ id: 't2' })]
+    rerender(
+      <Providers tasks={tasksWithUnrelatedAdd}>
+        <LiveRegion />
+        <Toolbar />
+      </Providers>,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent('')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Активные 2' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Активные: 2 задачи')
+  })
+
   it('keeps an empty segment clickable and focusable with no disabled/aria-disabled', () => {
     const tasks = [makeTask({ id: 't1' })]
     renderToolbar(tasks)
