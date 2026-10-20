@@ -3,6 +3,7 @@ import type { KeyboardEvent } from 'react'
 import { motion } from 'framer-motion'
 import { cn } from '../lib/cn'
 import { useMediaQuery } from '../lib/useMediaQuery'
+import { segmentTabId } from './segmentTabId'
 
 export interface SegmentedControlOption {
   id: string
@@ -16,6 +17,16 @@ export interface SegmentedControlProps {
   onSelect: (id: string) => void
   'aria-label': string
   className?: string
+  /** `aria-controls` target on every tab — the `role="tabpanel"` this control drives. */
+  panelId?: string
+  /**
+   * Stable prefix for each tab's DOM id (`${idPrefix}-tab-${optionId}`).
+   * Falls back to an internal `useId()` when omitted. A caller needs this to
+   * predict the selected tab's id for the panel's `aria-labelledby` — the
+   * previous `useId()`-only id never left this component (FELA-15, TechLead
+   * review on the toolbar merge).
+   */
+  idPrefix?: string
 }
 
 /**
@@ -40,9 +51,12 @@ export function SegmentedControl({
   onSelect,
   className,
   'aria-label': ariaLabel,
+  panelId,
+  idPrefix,
 }: SegmentedControlProps) {
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
-  const baseId = useId()
+  const internalId = useId()
+  const baseId = idPrefix ?? internalId
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
   function focusAndSelect(id: string) {
@@ -93,13 +107,14 @@ export function SegmentedControl({
         return (
           <button
             key={option.id}
-            id={`${baseId}-tab-${option.id}`}
+            id={segmentTabId(baseId, option.id)}
             ref={(node) => {
               tabRefs.current[option.id] = node
             }}
             type="button"
             role="tab"
             aria-selected={selected}
+            aria-controls={panelId}
             tabIndex={selected ? 0 : -1}
             onClick={() => onSelect(option.id)}
             className={cn(

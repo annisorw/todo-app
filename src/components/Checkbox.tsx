@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import type { InputHTMLAttributes } from 'react'
 import { cn } from '../lib/cn'
 
@@ -35,10 +36,14 @@ function CheckIcon() {
  * so it stays focusable, and the global `:focus-visible` ring in `base.css`
  * lands on that real hit area.
  */
-export function Checkbox({ checked, label, disabled, className, ...rest }: CheckboxProps) {
+export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox(
+  { checked, label, disabled, className, ...rest },
+  ref,
+) {
   return (
     <span className={cn('relative inline-flex size-11 shrink-0 items-center justify-center sm:size-8', className)}>
       <input
+        ref={ref}
         type="checkbox"
         checked={checked}
         disabled={disabled}
@@ -62,4 +67,4 @@ export function Checkbox({ checked, label, disabled, className, ...rest }: Check
       </span>
     </span>
   )
-}
+})
