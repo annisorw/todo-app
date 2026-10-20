@@ -85,6 +85,10 @@
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   /* Counters and <kbd> only. */
   --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  /* The only static cut of JetBrains Mono in the repo is 400 (fonts.css); a
+   * heavier weight is the browser faking bold by outlining the glyph, which
+   * shows as a blurred digit at 11-13 px (design-spec v1.4, criterion 35). */
+  --font-mono--font-weight: 400;
 
   --text-display: 40px;
   --text-display--line-height: 44px;
@@ -327,6 +331,21 @@
   box-shadow: var(--shadow-drag);
 }
 
+/* The only entry point into mono (CODE-RULES.md section 8): weight is pinned
+ * to --font-mono--font-weight, never inherited from a surrounding text-* token
+ * (design-spec v1.4, criterion 35), and tabular-nums is bundled in because it
+ * is the reason counters use mono at all — a digit must not reflow the layout
+ * on 9 -> 10. */
+@utility text-mono-num {
+  font-family: var(--font-mono);
+  /* Tailwind's text-* utilities read weight from this variable and print
+   * after hand-written @utility blocks, so they win on source order unless
+   * we set it here too — this is what actually fixes criterion 35 when
+   * combined with text-caption/text-label/text-micro. */
+  --tw-font-weight: var(--font-mono--font-weight);
+  font-weight: var(--font-mono--font-weight);
+  font-variant-numeric: tabular-nums;
+}
 @utility bg-gradient-accent {
   background-image: var(--gradient-accent);
 }
