@@ -22,7 +22,11 @@ export function AppShell({ children }: AppShellProps) {
       <div className="relative z-(--z-content) flex min-h-dvh flex-col">
         <AppHeader />
 
-        <main className="mx-auto w-full max-w-(--layout-content-max) flex-1 px-(--layout-gutter)">
+        {/* 120px mobile-only bottom padding (design-spec 6.2) keeps the fixed
+         * `Fab` + toast from covering the last row — not on the spacing
+         * scale, same one-off exception as the due-today font weight in
+         * `DueDateChip`. */}
+        <main className="mx-auto w-full max-w-(--layout-content-max) flex-1 px-(--layout-gutter) max-sm:pb-[120px]">
           {children}
         </main>
 

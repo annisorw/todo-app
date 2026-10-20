@@ -10,6 +10,9 @@
 /** Characters in a task title, after trimming the edges. */
 export const MAX_TITLE_LENGTH = 500
 
+/** Where the title character counter starts showing (design-spec 3.7, 3.11a: from the 450th of 500). */
+export const TITLE_COUNTER_THRESHOLD = MAX_TITLE_LENGTH - 50
+
 /** Tasks held in the list at once. Caps what a hostile `localStorage` payload can grow to. */
 export const MAX_TASKS = 1000
 
