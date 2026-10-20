@@ -24,9 +24,23 @@ import { MAX_TASKS, MAX_TITLE_LENGTH } from '../domain/limits'
 import { isPriority } from '../domain/task'
 import type { Priority, Task } from '../domain/task'
 import { readRaw, writeRaw } from './localStorageDriver'
-import type { StorageError } from './localStorageDriver'
+import type { StorageError, StorageResult } from './localStorageDriver'
 
 export const TASKS_STORAGE_KEY = 'aurora.tasks.v1'
+
+/**
+ * Карантин нечитаемого значения.
+ *
+ * Разобрать не удалось — значит, байты основного ключа через 250 мс заменит
+ * пустой конверт персиста, и человеку будет нечего выгружать кнопкой «Выгрузить
+ * в файл» из `ErrorBanner` ([FELA-18](/FELA/issues/FELA-18), спека, строка 387).
+ * Обрезанный JSON часто правится руками, поэтому копия снимается до любой
+ * записи, а не вместо неё: очищающая запись в основной ключ остаётся как была.
+ *
+ * Класс данных тот же, что и в основном ключе, — текст задач; политика
+ * содержимого хранилища (`docs/CODE-RULES.md`, раздел 3) не меняется.
+ */
+export const CORRUPTED_BACKUP_KEY = 'aurora.tasks.v1.corrupted'
 
 /**
  * Версия схемы хранения. Миграций сегодня нет; это место, куда их добавят, не
@@ -167,12 +181,46 @@ export function parseStoredTasks(raw: string): TasksReadResult {
   return { tasks, error: null, droppedCount }
 }
 
+/**
+ * Снимает копию нечитаемого значения в карантин.
+ *
+ * Отказ копии не меняет ответ `readTasks`: человеку важнее баннер
+ * `'corrupted'`, чем сообщение о неудавшейся подстраховке. В dev отказ виден в
+ * консоли, молча он не проходит. Повторная копия тех же байт не делается — при
+ * заблокированной записи основной ключ не очищается, и каждая загрузка иначе
+ * писала бы в карантин одно и то же.
+ */
+function quarantineRaw(raw: string): void {
+  const existing = readRaw(CORRUPTED_BACKUP_KEY)
+  if (existing.ok && existing.value === raw) return
+
+  const error = writeRaw(CORRUPTED_BACKUP_KEY, raw)
+  if (error !== null && import.meta.env.DEV) {
+    console.warn(`localStorage: could not back up the unreadable value to "${CORRUPTED_BACKUP_KEY}" (${error}).`)
+  }
+}
+
+/**
+ * Отдаёт сохранённое в карантине нечитаемое значение — источник для кнопки
+ * «Выгрузить в файл» ([FELA-18](/FELA/issues/FELA-18)). `{ ok: true, value: null }`
+ * — карантин пуст, то есть выгружать нечего.
+ */
+export function readCorruptedBackup(): StorageResult<string | null> {
+  return readRaw(CORRUPTED_BACKUP_KEY)
+}
+
 export function readTasks(): TasksReadResult {
   const result = readRaw(TASKS_STORAGE_KEY)
   if (!result.ok) return { tasks: [], error: result.error, droppedCount: 0 }
   // Ключа нет — первый запуск, это норма, а не поломка.
   if (result.value === null) return { tasks: [], error: null, droppedCount: 0 }
-  return parseStoredTasks(result.value)
+
+  const parsed = parseStoredTasks(result.value)
+  // Разбор провалился целиком — сохранить байты до того, как персист заменит
+  // их пустым конвертом. Отброшенные отдельные задачи сюда не попадают: там
+  // конверт прочитан и выгружать из сырой строки нечего.
+  if (parsed.error === 'corrupted') quarantineRaw(result.value)
+  return parsed
 }
 
 /** @returns `null`, если записалось */

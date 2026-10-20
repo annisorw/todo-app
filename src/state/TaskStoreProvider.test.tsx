@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TASKS_STORAGE_KEY } from '../storage/taskStorage'
+import { TASKS_STORAGE_KEY, readCorruptedBackup } from '../storage/taskStorage'
 import { PERSIST_DEBOUNCE_MS } from '../storage/useDebouncedPersist'
 import { makeTask } from '../test/factories'
 import { blockedError, quotaError, storedItems, storedPayload, stubLocalStorage } from '../test/storage'
@@ -169,6 +169,26 @@ describe('TaskStoreProvider', () => {
     expect(screen.getByTestId('error')).toHaveTextContent('quota')
     // Запись не удалась, но список в памяти жив.
     expect(titles()).toEqual(['Новая'])
+  })
+
+  /**
+   * Персист через 250 мс заменяет нечитаемое значение пустым конвертом. К тому
+   * моменту человек ещё читает баннер, а кнопка «Выгрузить в файл»
+   * ([FELA-18](/FELA/issues/FELA-18), спека, строка 387) должна отдать ему его
+   * байты, а не пустоту.
+   */
+  it('keeps a corrupted payload reachable after the debounce window', () => {
+    const truncated = '{"version":1,"tasks":[{"id":"a","title":"Первая"},'
+    vi.useFakeTimers()
+    stub = stubLocalStorage({ items: storedItems(truncated) })
+
+    renderStore()
+    expect(screen.getByTestId('error')).toHaveTextContent('corrupted')
+    letPersistRun()
+
+    // Основной ключ очищен нарочно — а исходные байты лежат в карантине.
+    expect(stub.items.get(TASKS_STORAGE_KEY)).toBe('{"version":1,"tasks":[]}')
+    expect(readCorruptedBackup()).toEqual({ ok: true, value: truncated })
   })
 
   it('lets the person dismiss the banner', async () => {

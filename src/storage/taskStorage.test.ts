@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTask, makeTasks } from '../test/factories'
-import { blockedError, quotaError, storedItems, stubLocalStorage } from '../test/storage'
+import { blockedError, quotaError, storedItems, storedPayload, stubLocalStorage } from '../test/storage'
 import type { StorageStub } from '../test/storage'
-import { TASKS_STORAGE_KEY, parseStoredTasks, readTasks, writeTasks } from './taskStorage'
+import {
+  CORRUPTED_BACKUP_KEY,
+  TASKS_STORAGE_KEY,
+  parseStoredTasks,
+  readCorruptedBackup,
+  readTasks,
+  writeTasks,
+} from './taskStorage'
 
 const silenceWarnings = () => vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
@@ -80,6 +87,73 @@ describe('taskStorage', () => {
       tasks: [],
       error: 'corrupted',
       droppedCount: 0,
+    })
+  })
+
+  /**
+   * Нечитаемое значение — единственное, что у человека осталось от его списка.
+   * Персист заменит его пустым конвертом через 250 мс, поэтому копия снимается
+   * при гидратации: из неё кнопка «Выгрузить в файл» ([FELA-18](/FELA/issues/FELA-18))
+   * отдаёт исходные байты.
+   */
+  describe('quarantine of an unreadable value', () => {
+    const TRUNCATED = '{"version":1,"tasks":[{"id":"a","title":"Первая"},'
+
+    it('keeps the original bytes when the JSON does not parse', () => {
+      stub = stubLocalStorage({ items: storedItems(TRUNCATED) })
+
+      expect(readTasks().error).toBe('corrupted')
+
+      expect(stub.items.get(CORRUPTED_BACKUP_KEY)).toBe(TRUNCATED)
+      expect(readCorruptedBackup()).toEqual({ ok: true, value: TRUNCATED })
+    })
+
+    it('keeps the bytes of an envelope of another schema version', () => {
+      const foreign = JSON.stringify({ version: 2, tasks: [makeTask()] })
+      stub = stubLocalStorage({ items: storedItems(foreign) })
+
+      readTasks()
+
+      expect(stub.items.get(CORRUPTED_BACKUP_KEY)).toBe(foreign)
+    })
+
+    it('does not touch the quarantine when the value reads fine', () => {
+      stub = stubLocalStorage({ items: storedItems(storedPayload([makeTask()])) })
+
+      expect(readTasks().error).toBeNull()
+
+      expect(stub.items.has(CORRUPTED_BACKUP_KEY)).toBe(false)
+      expect(readCorruptedBackup()).toEqual({ ok: true, value: null })
+    })
+
+    // Конверт прочитан, отброшены отдельные задачи — выгружать из сырой строки
+    // нечего, и чистый список в карантине только путал бы.
+    it('does not quarantine when only single entries were dropped', () => {
+      stub = stubLocalStorage({
+        items: storedItems(JSON.stringify({ version: 1, tasks: [makeTask(), null] })),
+      })
+
+      expect(readTasks().droppedCount).toBe(1)
+
+      expect(stub.items.has(CORRUPTED_BACKUP_KEY)).toBe(false)
+    })
+
+    it('does not rewrite the quarantine with bytes it already holds', () => {
+      stub = stubLocalStorage({
+        items: { ...storedItems(TRUNCATED), [CORRUPTED_BACKUP_KEY]: TRUNCATED },
+      })
+
+      readTasks()
+
+      expect(stub.setItem).not.toHaveBeenCalled()
+    })
+
+    // Подстраховка не важнее основного ответа: баннер 'corrupted' человек
+    // увидит и при отказе записи.
+    it('still reports corrupted when the backup write fails', () => {
+      stub = stubLocalStorage({ items: storedItems(TRUNCATED), writeError: quotaError() })
+
+      expect(readTasks()).toEqual({ tasks: [], error: 'corrupted', droppedCount: 0 })
     })
   })
 
