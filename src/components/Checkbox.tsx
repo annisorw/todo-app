@@ -29,8 +29,9 @@ function CheckIcon() {
  * a 1.5 px border. 22/26 px is the *painted* size; on its own it would sit
  * under the accessibility section's 24×24 WCAG 2.2 floor and well under the
  * 32/44 px target guidance, so the native input's hit area is the larger
- * 32×32 desktop / 44×44 mobile box (matching `IconButton`), with the small
- * circle centered inside it. The input uses `opacity-0` (not `display: none`)
+ * 32×32 desktop / 44×44 mobile box, still above the 24×24 WCAG 2.2 floor
+ * though smaller than `IconButton`'s 40/44, with the small circle centered
+ * inside it. The input uses `opacity-0` (not `display: none`)
  * so it stays focusable, and the global `:focus-visible` ring in `base.css`
  * lands on that real hit area.
  */

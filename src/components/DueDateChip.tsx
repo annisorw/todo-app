@@ -1,10 +1,20 @@
-import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react'
+import { forwardRef } from 'react'
+import type { ComponentPropsWithoutRef, CSSProperties, ReactNode } from 'react'
 import type { DueDateStatus } from '../domain/dueDate'
+import {
+  CHIP_BASE_CLASSES,
+  CHIP_CLOSED_BORDER_CLASS,
+  CHIP_OPEN_BACKGROUND_STYLE,
+  CHIP_OPEN_BORDER_CLASS,
+  ChipTag,
+  type ChipVariant,
+} from './chip'
 import { cn } from '../lib/cn'
 
-export type ChipVariant = 'static' | 'interactive'
+export type { ChipVariant }
 
-export interface DueDateChipProps {
+export interface DueDateChipProps
+  extends Omit<ComponentPropsWithoutRef<'button'>, 'children' | 'style' | 'aria-expanded'> {
   status: DueDateStatus
   /**
    * The chip's visible label. Formatting lives in `domain/dueDate.ts`
@@ -14,12 +24,9 @@ export interface DueDateChipProps {
    * own fixed text for them instead.
    */
   label: string
-  /** `static` renders an inert `<span>`; `interactive` renders a focusable `<button>` (design-spec v1.1, section 7). */
   variant?: ChipVariant
   /** Only meaningful when `variant="interactive"`: is the attached picker open? */
   expanded?: boolean
-  onClick?: ButtonHTMLAttributes<HTMLButtonElement>['onClick']
-  className?: string
 }
 
 function ClockIcon() {
@@ -31,111 +38,88 @@ function ClockIcon() {
   )
 }
 
-const BASE_CLASSES =
-  'inline-flex h-6 items-center gap-1 rounded-full px-2 text-caption transition-colors duration-(--duration-fast) ease-standard'
+interface StatusPresentation {
+  content: (label: string) => ReactNode
+  colorClass: string
+  borderClass: string
+  fontWeight?: number
+  /** Whether the open-picker gradient/border applies to this status (`none`/`invalid` never open a picker). */
+  respondsToOpen?: boolean
+}
 
-/** design-spec 3.13 + v1.1 — `set`/`due-today`/`overdue` map to the domain's `upcoming`/`today`/`overdue`; `none` is the dashed "Срок" placeholder. */
-export function DueDateChip({ status, label, variant = 'static', expanded = false, onClick, className }: DueDateChipProps) {
-  const isInteractive = variant === 'interactive'
-  const isOpen = isInteractive && expanded
-
-  if (status === 'none') {
-    return (
-      <Tag
-        isInteractive={isInteractive}
-        expanded={expanded}
-        onClick={onClick}
-        className={cn(BASE_CLASSES, 'border border-dashed border-surface-border-strong text-tertiary', className)}
-      >
-        Срок
-      </Tag>
-    )
-  }
-
-  if (status === 'invalid') {
-    return (
-      <Tag
-        isInteractive={isInteractive}
-        expanded={expanded}
-        onClick={onClick}
-        className={cn(BASE_CLASSES, 'border border-transparent text-danger', className)}
-      >
-        Неверная дата
-      </Tag>
-    )
-  }
-
-  if (status === 'overdue') {
-    return (
-      <Tag
-        isInteractive={isInteractive}
-        expanded={expanded}
-        onClick={onClick}
-        style={isOpen ? { backgroundImage: 'var(--gradient-accent-soft)' } : undefined}
-        className={cn(BASE_CLASSES, 'text-overdue', isOpen ? 'border border-accent-text' : 'border border-transparent', className)}
-      >
+/** design-spec 3.13 + v1.1 — maps the domain's `DueDateStatus` to colour, icon and border per state. */
+const STATUS_PRESENTATION: Record<DueDateStatus, StatusPresentation> = {
+  none: {
+    content: () => 'Срок',
+    colorClass: 'text-tertiary',
+    borderClass: 'border border-dashed border-surface-border-strong',
+  },
+  invalid: {
+    content: () => 'Неверная дата',
+    colorClass: 'text-danger',
+    borderClass: CHIP_CLOSED_BORDER_CLASS,
+  },
+  overdue: {
+    content: (label) => (
+      <>
         <ClockIcon />
         {label}
-      </Tag>
-    )
-  }
+      </>
+    ),
+    colorClass: 'text-overdue',
+    borderClass: CHIP_CLOSED_BORDER_CLASS,
+    respondsToOpen: true,
+  },
+  today: {
+    content: (label) => label,
+    colorClass: 'text-primary',
+    borderClass: CHIP_CLOSED_BORDER_CLASS,
+    // design-spec 3.13: weight 550 for `due-today`. No standalone weight-550
+    // Tailwind utility exists (it only ships bundled inside the type-scale
+    // composites), so this one value stays local to the component.
+    fontWeight: 550,
+    respondsToOpen: true,
+  },
+  upcoming: {
+    content: (label) => label,
+    colorClass: 'text-secondary',
+    borderClass: CHIP_CLOSED_BORDER_CLASS,
+    respondsToOpen: true,
+  },
+}
 
-  if (status === 'today') {
-    return (
-      <Tag
-        isInteractive={isInteractive}
-        expanded={expanded}
-        onClick={onClick}
-        style={{
-          // design-spec 3.13: weight 550 for `due-today`. No standalone weight-550
-          // Tailwind utility exists (it only ships bundled inside the type-scale
-          // composites), so this one value stays local to the component.
-          fontWeight: 550,
-          ...(isOpen ? { backgroundImage: 'var(--gradient-accent-soft)' } : {}),
-        }}
-        className={cn(BASE_CLASSES, 'text-primary', isOpen ? 'border border-accent-text' : 'border border-transparent', className)}
-      >
-        {label}
-      </Tag>
-    )
-  }
+/** design-spec 3.13 + v1.1 — `set`/`due-today`/`overdue` map to the domain's `upcoming`/`today`/`overdue`; `none` is the dashed "Срок" placeholder. */
+export const DueDateChip = forwardRef<HTMLButtonElement, DueDateChipProps>(function DueDateChip(
+  { status, label, variant = 'static', expanded = false, className, ...rest },
+  ref,
+) {
+  const isInteractive = variant === 'interactive'
+  const presentation = STATUS_PRESENTATION[status]
+  const isOpen = isInteractive && expanded && (presentation.respondsToOpen ?? false)
 
-  // status === 'upcoming' ('set' in design-spec prose)
+  const style: CSSProperties | undefined =
+    presentation.fontWeight !== undefined || isOpen
+      ? {
+          ...(presentation.fontWeight !== undefined ? { fontWeight: presentation.fontWeight } : {}),
+          ...(isOpen ? CHIP_OPEN_BACKGROUND_STYLE : {}),
+        }
+      : undefined
+
   return (
-    <Tag
+    <ChipTag
+      ref={ref}
       isInteractive={isInteractive}
       expanded={expanded}
-      onClick={onClick}
-      style={isOpen ? { backgroundImage: 'var(--gradient-accent-soft)' } : undefined}
-      className={cn(BASE_CLASSES, 'text-secondary', isOpen ? 'border border-accent-text' : 'border border-transparent', className)}
+      style={style}
+      className={cn(
+        CHIP_BASE_CLASSES,
+        presentation.colorClass,
+        isOpen ? CHIP_OPEN_BORDER_CLASS : presentation.borderClass,
+        className,
+      )}
+      {...rest}
     >
-      {label}
-    </Tag>
+      {presentation.content(label)}
+    </ChipTag>
   )
-}
-
-interface TagProps {
-  isInteractive: boolean
-  expanded: boolean
-  onClick?: ButtonHTMLAttributes<HTMLButtonElement>['onClick']
-  className: string
-  style?: CSSProperties
-  children: ReactNode
-}
-
-/** Swaps element type by variant: a real `<button>` when interactive, an inert `<span>` otherwise. */
-function Tag({ isInteractive, expanded, onClick, className, style, children }: TagProps) {
-  if (isInteractive) {
-    return (
-      <button type="button" aria-expanded={expanded} onClick={onClick} style={style} className={className}>
-        {children}
-      </button>
-    )
-  }
-
-  return (
-    <span style={style} className={className}>
-      {children}
-    </span>
-  )
-}
+})
