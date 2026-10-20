@@ -153,3 +153,14 @@ backstopped by GitHub.
 `tsconfig.node-test.json` includes `src/**/*.node.test.ts` and gives it `node` types;
 `tsconfig.app.json` excludes the same glob. Name the file right and both sides pick it up
 automatically — no second list to update, no file that typechecks under the wrong project.
+
+## 8. Mono text only through `.text-mono-num`, never `var(--font-mono)` directly
+
+`font-family: var(--font-mono)` written directly in markup or in a component is forbidden.
+Go through the `.text-mono-num` utility in `src/styles/tokens.css` instead — it sets
+`font-family`, `font-weight` (pinned to `--font-mono--font-weight`, 400) and
+`font-variant-numeric: tabular-nums` together. The repository ships only the 400 static cut
+of JetBrains Mono; a mono element that inherits a heavier weight (e.g. `text-caption`'s 500)
+gets a browser-synthesized bold that blurs at 11-13 px instead of failing visibly. Writing
+`var(--font-mono)` by hand also drops `tabular-nums`, which is why mono was chosen for
+counters in the first place — without it a digit reflows the layout on 9 -> 10.
