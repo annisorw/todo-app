@@ -76,9 +76,14 @@ export const Toolbar = forwardRef<HTMLInputElement, ToolbarProps>(function Toolb
     )
   }, [filter, debouncedQuery, view])
 
+  const onStateChangeRef = useRef(onStateChange)
   useEffect(() => {
-    onStateChange?.({ filter, query: debouncedQuery, view })
-  }, [filter, debouncedQuery, view, onStateChange])
+    onStateChangeRef.current = onStateChange
+  })
+
+  useEffect(() => {
+    onStateChangeRef.current?.({ filter, query: debouncedQuery, view })
+  }, [filter, debouncedQuery, view])
 
   return (
     <>
