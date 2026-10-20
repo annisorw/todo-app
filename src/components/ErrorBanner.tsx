@@ -1,7 +1,7 @@
 import type { StorageError } from '../storage/localStorageDriver'
 import { readCorruptedBackup } from '../storage/taskStorage'
 import { useTaskStore } from '../state/useTaskStore'
-import { useToast } from '../state/ToastProvider'
+import { useToast } from '../state/useToast'
 import { Button } from './Button'
 import { cn } from '../lib/cn'
 

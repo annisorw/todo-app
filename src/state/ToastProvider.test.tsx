@@ -5,8 +5,9 @@ import { storedItems, storedPayload, stubLocalStorage } from '../test/storage'
 import type { StorageStub } from '../test/storage'
 import { TaskStoreProvider } from './TaskStoreProvider'
 import { useTaskStore } from './useTaskStore'
-import { ToastProvider, useToast } from './ToastProvider'
+import { ToastProvider } from './ToastProvider'
 import type { ToastOptions } from './ToastProvider'
+import { useToast } from './useToast'
 
 /** Pushes a fixed toast on click, so tests don't need a real trigger UI. */
 function PushButton({ options, label }: { options: ToastOptions; label: string }) {
