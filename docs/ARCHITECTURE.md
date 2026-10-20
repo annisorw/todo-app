@@ -1,6 +1,8 @@
 # Архитектура Aurora Tasks
 
-Версия 1.0 · владелец документа — TechLead · задача [FELA-6](/FELA/issues/FELA-6)
+Версия 1.1 · владелец документа — TechLead · задача [FELA-6](/FELA/issues/FELA-6)
+
+Версия 1.1 приведена в соответствие с дизайн-спекой v1.1: правка задачи меняет все три поля (текст, приоритет, срок), поэтому `PrioritySelect` и `DueDatePicker` переехали в `components/`, а действие `task/edit` принимает патч, а не только заголовок.
 
 Этот документ — контракт разработки. Дизайн-спека (`docs/design-spec.md`) говорит, **как выглядит и ведёт себя** приложение; этот документ говорит, **где что лежит в коде**. Если нужно отступить от него — сначала обсуждение в задаче, потом код, а не наоборот.
 
@@ -58,14 +60,15 @@ src/
 
   components/                  система из раздела 3 спеки: презентационные, без бизнес-логики
     Button.tsx  IconButton.tsx  Checkbox.tsx  PriorityChip.tsx  DueDateChip.tsx
+    PrioritySelect.tsx  DueDatePicker.tsx
     Tooltip.tsx  Skeleton.tsx  Menu.tsx  Toast.tsx  ConfirmDialog.tsx
     ErrorBanner.tsx  EmptyState.tsx  ProgressRing.tsx  SegmentedControl.tsx
     LiveRegion.tsx  ShortcutsSheet.tsx
 
   features/                    экранная логика, связывает стор и компоненты
-    composer/   Composer.tsx  PrioritySelect.tsx  DueDatePicker.tsx  ComposerSheet.tsx
-    task-list/  TaskList.tsx  TaskRow.tsx  TaskEditor.tsx  CompletedSection.tsx
-                useTaskReorder.ts  useRovingFocus.ts
+    composer/   Composer.tsx  ComposerSheet.tsx
+    task-list/  TaskList.tsx  TaskRow.tsx  TaskEditor.tsx  TaskEditorSheet.tsx
+                CompletedSection.tsx  useTaskReorder.ts  useRovingFocus.ts
     toolbar/    Toolbar.tsx  SearchField.tsx  FilterTabs.tsx  useStickyBand.ts
     shortcuts/  useGlobalShortcuts.ts
 
@@ -84,6 +87,7 @@ src/
 
 - **`domain/` не знает про React, `components/` не знает про стор.** Логика тестируется без рендера, компоненты — без моков хранилища. Если компоненту нужны данные, он получает их пропсами от `features/`.
 - **`components/` против `features/`.** В `components/` живёт то, что можно переиспользовать и описать одними пропсами. В `features/` — то, что знает про конкретный экран и дёргает стор. Компонент, который сам читает `useTaskStore`, обязан лежать в `features/`.
+- **`PrioritySelect` и `DueDatePicker` лежат в `components/`, а не внутри `composer/`.** По спеке v1.1 у них три места вызова: `Composer`, `TaskEditor` и быстрый путь прямо из строки на десктопе. Три копии одного пикера — это три разных поведения через месяц, поэтому они управляются пропсами `value` / `onChange` и ничего не знают ни про стор, ни про то, кто их открыл.
 - Один компонент — один файл. Папка на компонент заводится, только когда появляется второй файл (стили, тест, подкомпонент).
 - Тест лежит рядом с тестируемым файлом: `taskList.ts` → `taskList.test.ts`.
 
@@ -110,12 +114,13 @@ export interface Task {
 }
 ```
 
-Четыре решения, которые нельзя переигрывать в коде:
+Пять решений, которые нельзя переигрывать в коде:
 
 1. **`done` — не поле, а производное:** `isDone(task) === task.completedAt !== null`. Отдельный boolean рядом с меткой времени — это два источника правды, которые разъедутся (*one source of truth*). Секция `Выполнено` сортируется по `completedAt` вниз от новых, тоже без отдельного поля.
-2. **Ручной порядок — это позиция в массиве `tasks`.** Поля `order` нет. Автосортировок нет (спека, раздел 1), значит массив и есть порядок, а `move(from, to)` — его единственный мутатор.
-3. **`dueDate` — строка `YYYY-MM-DD`, не `Date`.** `Date` в `localStorage` всё равно превращается в строку, а часовой пояс на сериализации сдвигает дату на сутки. Сравнение с «сегодня» — тоже по локальной строке `YYYY-MM-DD`.
-4. **Фильтр, поисковый запрос, открытое меню, режим правки — это не данные, а состояние интерфейса.** В `Task` и в `localStorage` их нет.
+2. **Правка — это патч, а не присваивание заголовка.** `TaskPatch = Partial<Pick<Task, 'title' | 'priority' | 'dueDate'>>`. По спеке v1.1 (3.11a) редактор меняет текст, приоритет и срок разом, а быстрый путь из строки — одно поле. Один патч-путь на оба случая вместо трёх отдельных действий.
+3. **Ручной порядок — это позиция в массиве `tasks`.** Поля `order` нет. Автосортировок нет (спека, раздел 1), значит массив и есть порядок, а `move(from, to)` — его единственный мутатор.
+4. **`dueDate` — строка `YYYY-MM-DD`, не `Date`.** `Date` в `localStorage` всё равно превращается в строку, а часовой пояс на сериализации сдвигает дату на сутки. Сравнение с «сегодня» — тоже по локальной строке `YYYY-MM-DD`.
+5. **Фильтр, поисковый запрос, открытое меню, режим правки — это не данные, а состояние интерфейса.** В `Task` и в `localStorage` их нет.
 
 ---
 
@@ -128,7 +133,7 @@ export type TaskAction =
   | { type: 'tasks/hydrate';       tasks: Task[] }
   | { type: 'task/add';            draft: TaskDraft }
   | { type: 'task/toggle';         id: string }
-  | { type: 'task/edit';           id: string; title: string }
+  | { type: 'task/edit';           id: string; patch: TaskPatch }
   | { type: 'task/remove';         id: string }
   | { type: 'task/restoreRemoved' }
   | { type: 'task/move';           from: number; to: number }
