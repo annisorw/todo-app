@@ -160,3 +160,87 @@ describe('Composer', () => {
     expect(screen.getByText('Из шторки')).toBeInTheDocument()
   })
 })
+
+/**
+ * Acceptance criterion 32 on real components, not on a harness: the sheet is a
+ * `role="dialog"` layer and the priority popover opens inside it, so this is
+ * the first genuine pair of stacked layers in the app. `useDismissable.test.tsx`
+ * proves the stack; this proves the components are actually wired to it.
+ */
+describe('Composer sheet + chip popover — two stacked Esc layers', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    stubMatchMedia(false)
+  })
+
+  async function openSheet(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: 'Добавить задачу' }))
+    return screen.getByRole('dialog', { name: 'Добавить задачу' })
+  }
+
+  it('the first Esc closes the popover and returns focus to its chip, the second closes the sheet', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    const dialog = await openSheet(user)
+    const chip = within(dialog).getByRole('button', { name: 'Приоритет' })
+    await user.click(chip)
+    expect(within(dialog).getByRole('menu')).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+
+    expect(within(dialog).queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Добавить задачу' })).toBeInTheDocument()
+    expect(chip).toHaveFocus()
+
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('dialog', { name: 'Добавить задачу' })).not.toBeInTheDocument()
+  })
+
+  it('does not close the sheet underneath while a popover is open', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    const dialog = await openSheet(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Срок' }))
+
+    await user.keyboard('{Escape}')
+
+    expect(screen.getByRole('dialog', { name: 'Добавить задачу' })).toBeInTheDocument()
+  })
+
+  it('gives Esc to the sheet, not to the textarea that clears the draft', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    const dialog = await openSheet(user)
+    await user.type(within(dialog).getByRole('textbox', { name: 'Текст новой задачи' }), 'черновик')
+
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('dialog', { name: 'Добавить задачу' })).not.toBeInTheDocument()
+    // Esc belongs to the top layer alone, so the field's own Esc (clear the
+    // draft) never runs — reopening the sheet still shows the text.
+    await openSheet(user)
+    expect(screen.getByRole('dialog', { name: 'Добавить задачу' })).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog')).getByRole('textbox', { name: 'Текст новой задачи' })).toHaveValue('черновик')
+  })
+
+  it('an outside click closes the popover without moving focus', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    const dialog = await openSheet(user)
+    const chip = within(dialog).getByRole('button', { name: 'Приоритет' })
+    await user.click(chip)
+    expect(within(dialog).getByRole('menu')).toBeInTheDocument()
+
+    const field = within(dialog).getByRole('textbox', { name: 'Текст новой задачи' })
+    await user.click(field)
+
+    expect(within(dialog).queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Добавить задачу' })).toBeInTheDocument()
+    expect(field).toHaveFocus()
+  })
+})

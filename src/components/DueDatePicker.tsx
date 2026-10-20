@@ -4,8 +4,9 @@ import type { ChangeEvent, RefObject } from 'react'
 import { describeDueDate, toDateKey } from '../domain/dueDate'
 import { announce } from '../lib/announce'
 import { cn } from '../lib/cn'
+import { useDismissable } from '../lib/useDismissable'
 import { useMediaQuery } from '../lib/useMediaQuery'
-import { usePopoverDismiss } from '../lib/usePopoverDismiss'
+import { useOutsideClick } from '../lib/useOutsideClick'
 import { DueDateChip } from './DueDateChip'
 
 export interface DueDatePickerProps {
@@ -52,13 +53,17 @@ interface DatePanelProps {
 }
 
 /**
- * Only mounted while the popover is open, so `usePopoverDismiss` runs for
- * exactly its open lifetime (same contract as `Menu`) instead of needing an
- * `open` flag threaded through the hook itself.
+ * Only mounted while the popover is open, so both dismiss hooks run for exactly
+ * its open lifetime (same contract as `Menu`) instead of needing an `open` flag
+ * threaded through them. Esc arrives from the app-wide stack
+ * (`lib/dismissStack.ts`), so the panel takes one Esc and the layer underneath
+ * — a dialog, the row editor — keeps the next one.
  */
 function DatePanel({ id, value, today, anchorRef, onCommit, onClose, prefersReducedMotion }: DatePanelProps) {
   const panelRef = useRef<HTMLDivElement>(null)
-  usePopoverDismiss({ onClose, anchorRef, panelRef })
+
+  useDismissable({ onDismiss: onClose, returnFocusTo: anchorRef })
+  useOutsideClick({ onOutsideClick: onClose, inside: [panelRef, anchorRef] })
 
   function handleNativeChange(event: ChangeEvent<HTMLInputElement>) {
     onCommit(event.target.value === '' ? null : event.target.value)

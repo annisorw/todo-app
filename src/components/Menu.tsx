@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import type { KeyboardEvent, ReactNode, RefObject } from 'react'
 import { cn } from '../lib/cn'
-import { usePopoverDismiss } from '../lib/usePopoverDismiss'
+import { useDismissable } from '../lib/useDismissable'
+import { useOutsideClick } from '../lib/useOutsideClick'
 
 export interface MenuItemConfig {
   key: string
@@ -33,12 +34,18 @@ function CheckGlyph() {
  * item on open, ↑/↓ wrap between items, Esc closes and returns focus to the
  * trigger, a click outside closes. `PrioritySelect` is the first caller;
  * `TaskRow`'s `more` menu (Изменить/Удалить) reuses it unchanged later.
+ *
+ * Esc comes from the one app-wide owner (`lib/dismissStack.ts` via
+ * `useDismissable`), so a menu opened inside a dialog or the row editor takes
+ * only the first Esc and leaves the layer underneath alone. Mounted only while
+ * open, which is what registers and unregisters the layer.
  */
 export function Menu({ id, items, anchorRef, onClose, className }: MenuProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([])
 
-  usePopoverDismiss({ onClose, anchorRef, panelRef })
+  useDismissable({ onDismiss: onClose, returnFocusTo: anchorRef })
+  useOutsideClick({ onOutsideClick: onClose, inside: [panelRef, anchorRef] })
 
   useEffect(() => {
     itemRefs.current[0]?.focus()
