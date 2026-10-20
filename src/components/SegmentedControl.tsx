@@ -29,6 +29,13 @@ export interface SegmentedControlProps {
  * muted, but it is never `disabled` nor `aria-disabled` (acceptance
  * criterion 33) — it stays clickable and focusable so an empty filter can
  * still lead to a real `EmptyState`.
+ *
+ * Counter colour is fixed by design-spec v1.4: unselected ->
+ * `--color-text-secondary`, selected -> `--color-text-primary`, count 0 ->
+ * `--color-text-tertiary` regardless of selection. The counter is deliberately
+ * NOT `font-mono`/`text-mono-num` yet — that class ships in FELA-54 (not yet
+ * on `main`); wiring it here early would risk a synthetic-bold weight on
+ * JetBrains Mono per the spec addendum. Pick it up once FELA-54 lands.
  */
 export function SegmentedControl({
   options,
@@ -99,7 +106,7 @@ export function SegmentedControl({
             tabIndex={selected ? 0 : -1}
             onClick={() => onSelect(option.id)}
             className={cn(
-              'relative flex h-8 min-w-max flex-1 items-center justify-center gap-(--space-1) rounded-(--radius-sm) px-(--space-3) text-label transition-colors duration-(--duration-fast) ease-standard sm:flex-initial',
+              'relative flex h-8 min-w-max flex-1 items-center justify-center gap-(--space-2) rounded-(--radius-sm) px-(--space-3) text-label transition-colors duration-(--duration-fast) ease-standard sm:flex-initial',
               selected ? 'text-primary' : 'text-secondary hover:text-primary',
             )}
           >
@@ -111,7 +118,7 @@ export function SegmentedControl({
               />
             )}
             <span>{option.label}</span>{' '}
-            <span className={cn('font-mono text-caption', empty ? 'text-tertiary' : selected ? 'text-primary' : 'text-tertiary')}>
+            <span className={cn('text-caption', empty ? 'text-tertiary' : selected ? 'text-primary' : 'text-secondary')}>
               {option.count}
             </span>
           </button>
