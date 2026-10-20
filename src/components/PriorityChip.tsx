@@ -6,9 +6,9 @@ import {
   CHIP_CLOSED_BORDER_CLASS,
   CHIP_OPEN_BACKGROUND_STYLE,
   CHIP_OPEN_BORDER_CLASS,
-  ChipTag,
   type ChipVariant,
 } from './chip'
+import { ChipTag } from './ChipTag'
 import { cn } from '../lib/cn'
 
 export type { ChipVariant }
