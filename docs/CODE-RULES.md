@@ -147,3 +147,9 @@ The control is therefore process, not configuration: the pull request template c
 the task is moved to `in_review`, assigned to the reviewer (normally TechLead), and the
 reviewer performs the merge. This only works if every agent honors the checklist; it is not
 backstopped by GitHub.
+
+## 7. A test that reads a file from disk is named `*.node.test.ts`
+
+`tsconfig.node-test.json` includes `src/**/*.node.test.ts` and gives it `node` types;
+`tsconfig.app.json` excludes the same glob. Name the file right and both sides pick it up
+automatically — no second list to update, no file that typechecks under the wrong project.
