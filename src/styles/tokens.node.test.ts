@@ -108,7 +108,7 @@ const PAIRS: Pair[] = [
  * load in this project, `?raw` query or not, and hands back empty content.
  * Vitest stubs plain CSS imports too, so disk is the only way to see what
  * `tokens.css` actually says. This file therefore has its own tsconfig project
- * with Node types (see tsconfig.tokens-test.json) instead of pulling `node`
+ * with Node types (see tsconfig.node-test.json) instead of pulling `node`
  * into the whole app project. Paths are relative to the project root, which is
  * Vitest's working directory.
  */

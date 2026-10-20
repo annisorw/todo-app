@@ -187,6 +187,21 @@ describe('updateTask', () => {
 
     expect(updateTask(list, 'task-2', { priority: 'low', dueDate: '2026-10-21' })).toBe(list)
   })
+
+  it('негодная дата в патче возвращает прежний список по ссылке', () => {
+    const list = tasks()
+
+    expect(updateTask(list, 'task-1', { dueDate: '2026-02-30' })).toBe(list)
+    expect(updateTask(list, 'task-1', { dueDate: 'not-a-date' })).toBe(list)
+  })
+
+  it('негодная дата отклоняет патч целиком, вместе с остальными полями', () => {
+    const list = tasks()
+
+    const next = updateTask(list, 'task-1', { title: 'Новая', dueDate: '2026-13-01' })
+
+    expect(next).toBe(list)
+  })
 })
 
 describe('removeTask', () => {
