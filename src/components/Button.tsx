@@ -13,13 +13,14 @@ export interface ButtonProps extends ComponentProps<'button'> {
 }
 
 /**
- * design-spec 3.5 — sm 32 / md 40 / lg 48.
- * `sm` grows to 44 below the 640px breakpoint so it still meets the spec's
- * mobile target minimum (section 7), the same way Checkbox and IconButton do.
+ * design-spec 3.5 — height desktop / mobile: sm 32 / 44 · md 40 / 44 · lg 48 / 48.
+ * `sm` and `md` grow below the 640px breakpoint so every size still meets the
+ * spec's mobile target minimum (section 7), the same way Checkbox and
+ * IconButton do. Horizontal padding does not depend on the viewport.
  */
 const SIZE_CLASSES: Record<ButtonSize, string> = {
   sm: 'h-11 px-3 sm:h-8',
-  md: 'h-10 px-4',
+  md: 'h-11 px-4 sm:h-10',
   lg: 'h-12 px-5',
 }
 
