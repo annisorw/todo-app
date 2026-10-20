@@ -351,4 +351,21 @@ describe('mono font weight', () => {
     expect(DARK_TOKENS['--text-label--font-weight']).toBe('550')
     expect(DARK_TOKENS['--text-micro--font-weight']).toBe('600')
   })
+
+  /**
+   * Tailwind's text-* utilities read font-weight through --tw-font-weight and
+   * print after hand-written @utility blocks in the bundle, so a plain
+   * `font-weight` declaration here loses to e.g. .text-caption on source
+   * order alone (measured in real Chromium — jsdom does not expand var() and
+   * cannot catch this). Setting the Tailwind variable is what actually makes
+   * criterion 35 hold under `class="text-caption text-mono-num"`; without
+   * this line the fix is easy to mistake for a stray duplicate and delete.
+   */
+  it('wins over text-* utilities by setting --tw-font-weight', () => {
+    const utilityBlock = CSS_WITHOUT_COMMENTS.match(
+      /@utility text-mono-num\s*{([^}]*)}/,
+    )?.[1]
+    expect(utilityBlock).toBeDefined()
+    expect(utilityBlock).toContain('--tw-font-weight: var(--font-mono--font-weight)')
+  })
 })

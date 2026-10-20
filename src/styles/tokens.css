@@ -334,6 +334,11 @@
  * on 9 -> 10. */
 @utility text-mono-num {
   font-family: var(--font-mono);
+  /* Tailwind's text-* utilities read weight from this variable and print
+   * after hand-written @utility blocks, so they win on source order unless
+   * we set it here too — this is what actually fixes criterion 35 when
+   * combined with text-caption/text-label/text-micro. */
+  --tw-font-weight: var(--font-mono--font-weight);
   font-weight: var(--font-mono--font-weight);
   font-variant-numeric: tabular-nums;
 }
