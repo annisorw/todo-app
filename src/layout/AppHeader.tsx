@@ -44,8 +44,6 @@ export function AppHeader() {
       {shortcutsOpen && (
         <div
           id={panelId}
-          role="dialog"
-          aria-label="Горячие клавиши"
           className="absolute top-full right-(--layout-gutter) z-(--z-dropdown) mt-(--space-2) rounded-(--radius-md) border border-surface-border bg-surface-2 p-(--space-4) text-body text-secondary shadow-md"
         >
           <p>Шпаргалка появится позже.</p>
