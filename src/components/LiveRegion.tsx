@@ -10,7 +10,21 @@ import { subscribeToAnnouncements } from '../lib/announce'
 export function LiveRegion() {
   const [message, setMessage] = useState('')
 
-  useEffect(() => subscribeToAnnouncements(setMessage), [])
+  useEffect(
+    () =>
+      subscribeToAnnouncements((next) => {
+        setMessage((previous) => {
+          if (previous !== next) return next
+          // Identical back-to-back announcements don't change the DOM, so
+          // assistive tech never notices the second one. Clear synchronously,
+          // then restore the text on the next microtask so the repeat still
+          // fires as a fresh mutation.
+          queueMicrotask(() => setMessage(next))
+          return ''
+        })
+      }),
+    [],
+  )
 
   return (
     <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">

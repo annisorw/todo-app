@@ -38,7 +38,7 @@ export function Hero({ date, summary, progressSlot }: HeroProps) {
       </div>
 
       {progressSlot && (
-        <div className="flex size-11 shrink-0 items-center justify-center">{progressSlot}</div>
+        <div className="flex shrink-0 items-center justify-center">{progressSlot}</div>
       )}
     </section>
   )

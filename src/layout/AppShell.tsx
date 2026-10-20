@@ -11,15 +11,15 @@ interface AppShellProps {
  * Design spec 3.1: `AuroraBackground` -> `AppHeader` -> `main` -> the
  * `ToastViewport` slot (left as a comment — nothing to mount yet, the
  * toast system is a later task). The inner wrapper needs its own stacking
- * context (`relative z-10`): without it, the `fixed` background would
- * paint over the static header/main content per CSS stacking order.
+ * context (`relative z-(--z-content)`): without it, the `fixed` background
+ * would paint over the static header/main content per CSS stacking order.
  */
 export function AppShell({ children }: AppShellProps) {
   return (
     <div className="relative min-h-dvh">
       <AuroraBackground />
 
-      <div className="relative z-10 flex min-h-dvh flex-col">
+      <div className="relative z-(--z-content) flex min-h-dvh flex-col">
         <AppHeader />
 
         <main className="mx-auto w-full max-w-(--layout-content-max) flex-1 px-(--layout-gutter)">

@@ -1,18 +1,7 @@
 import { render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { stubMatchMedia } from '../test/matchMedia'
 import { AuroraBackground } from './AuroraBackground'
-
-function stubMatchMedia(matches: boolean) {
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn((query: string) => ({
-      matches,
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })),
-  )
-}
 
 describe('AuroraBackground', () => {
   afterEach(() => {

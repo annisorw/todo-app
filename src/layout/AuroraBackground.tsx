@@ -32,7 +32,7 @@ export function AuroraBackground() {
       ))}
       <svg className="absolute inset-0 size-full opacity-50 mix-blend-overlay">
         <filter id="aurora-grain">
-          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" result="noise" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.25" numOctaves="2" stitchTiles="stitch" result="noise" />
           {/* Keep only the noise's alpha channel (0 RGB everywhere), so the
            * next step tints it with a single token colour instead of
            * painting random greys. */}

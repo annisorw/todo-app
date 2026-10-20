@@ -1,21 +1,10 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { LiveRegion } from '../components/LiveRegion'
 import { ThemeProvider } from '../state/ThemeProvider'
+import { stubMatchMedia } from '../test/matchMedia'
 import { ThemeToggle } from './ThemeToggle'
-
-function stubMatchMedia(matches: boolean) {
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn((query: string) => ({
-      matches,
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })),
-  )
-}
 
 function renderToggle() {
   return render(
