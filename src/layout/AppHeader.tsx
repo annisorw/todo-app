@@ -26,35 +26,37 @@ export function AppHeader() {
   const panelId = useId()
 
   return (
-    <header className="relative flex h-(--layout-header-h) items-center justify-between px-(--layout-gutter)">
-      <span className="text-micro uppercase text-primary">AURORA · TASKS</span>
+    <header className="h-(--layout-header-h)">
+      <div className="relative mx-auto flex h-full w-full max-w-(--layout-content-max) items-center justify-between px-(--layout-gutter)">
+        <span className="text-micro uppercase text-primary">AURORA · TASKS</span>
 
-      <div className="flex items-center gap-(--space-2)">
-        <IconButton
-          icon={<KeyboardIcon />}
-          aria-label="Горячие клавиши"
-          aria-expanded={shortcutsOpen}
-          aria-controls={panelId}
-          onClick={() => setShortcutsOpen((open) => !open)}
-        />
-        <ThemeToggle />
-      </div>
-
-      {shortcutsOpen && (
-        <div
-          id={panelId}
-          className="absolute top-full right-(--layout-gutter) z-(--z-dropdown) mt-(--space-2) rounded-(--radius-md) border border-surface-border bg-surface-2 p-(--space-4) text-body text-secondary shadow-md"
-        >
-          <p>Шпаргалка появится позже.</p>
-          <button
-            type="button"
-            onClick={() => setShortcutsOpen(false)}
-            className="mt-(--space-2) text-label text-accent-text"
-          >
-            Закрыть
-          </button>
+        <div className="flex items-center gap-(--space-2)">
+          <IconButton
+            icon={<KeyboardIcon />}
+            aria-label="Горячие клавиши"
+            aria-expanded={shortcutsOpen}
+            aria-controls={panelId}
+            onClick={() => setShortcutsOpen((open) => !open)}
+          />
+          <ThemeToggle />
         </div>
-      )}
+
+        {shortcutsOpen && (
+          <div
+            id={panelId}
+            className="absolute top-full right-(--layout-gutter) z-(--z-dropdown) mt-(--space-2) rounded-(--radius-md) border border-surface-border bg-surface-2 p-(--space-4) text-body text-secondary shadow-md"
+          >
+            <p>Шпаргалка появится позже.</p>
+            <button
+              type="button"
+              onClick={() => setShortcutsOpen(false)}
+              className="mt-(--space-2) text-label text-accent-text"
+            >
+              Закрыть
+            </button>
+          </div>
+        )}
+      </div>
     </header>
   )
 }
