@@ -24,7 +24,7 @@ export function Fab({ onClick }: FabProps) {
       onClick={onClick}
       aria-label="Добавить задачу"
       style={{ backgroundImage: 'var(--gradient-accent)' }}
-      className="fixed right-(--space-5) bottom-[calc(var(--space-5)+env(safe-area-inset-bottom))] z-(--z-sticky) flex size-14 items-center justify-center rounded-full text-accent-contrast shadow-lg transition-transform duration-(--duration-fast) ease-standard active:scale-95"
+      className="fixed right-(--space-5) bottom-[calc(var(--space-5)+env(safe-area-inset-bottom))] z-(--z-sticky) flex size-(--size-fab) items-center justify-center rounded-full text-accent-contrast shadow-lg transition-transform duration-(--duration-fast) ease-standard active:scale-95"
     >
       <PlusIcon />
     </button>
