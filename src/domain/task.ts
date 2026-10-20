@@ -1,8 +1,21 @@
 import { isValidDueDate } from './dueDate'
 import { MAX_TITLE_LENGTH } from './limits'
 
-/** Приоритет задачи. `none` — приоритет не выбран, это не «низкий». */
-export type Priority = 'none' | 'low' | 'medium' | 'high'
+/**
+ * Приоритеты по возрастанию важности. `none` — приоритет не выбран, это не «низкий».
+ *
+ * Список значений объявлен один раз и здесь: разборщику хранилища нужна
+ * проверка во время выполнения, а тип в рантайме не существует. Второй копии
+ * этих четырёх строк в коде быть не должно.
+ */
+export const PRIORITIES = ['none', 'low', 'medium', 'high'] as const
+
+export type Priority = (typeof PRIORITIES)[number]
+
+/** Проверка для недоверенного ввода: прочитанного из `localStorage`, прежде всего. */
+export function isPriority(value: unknown): value is Priority {
+  return typeof value === 'string' && PRIORITIES.some((priority) => priority === value)
+}
 
 export interface Task {
   /** crypto.randomUUID() */

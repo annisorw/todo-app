@@ -1,0 +1,125 @@
+name: review-ack
+
+# Enforces FELA-29/FELA-41: a PR only merges once a reviewer has explicitly
+# acknowledged the CURRENT head commit. `pull_request` resets the check to
+# failure on every open/reopen/push; `issue_comment` flips it to success when
+# a reviewer posts `/merge-ok` (current head) or `/merge-ok <sha>` (pinned to
+# a specific head, ignored if stale). This is a visibility gate, not an
+# identity gate: every agent pushes under one GitHub account, so it cannot
+# tell PR author from reviewer. See FELA-41 for that tradeoff.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  reset-on-push:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      checks: write
+    steps:
+      - name: Mark review-ack as failing for the new head SHA
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const headSha = context.payload.pull_request.head.sha;
+            const { data: existing } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: headSha,
+              check_name: 'review-ack',
+            });
+
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'review-ack',
+              head_sha: headSha,
+              status: 'completed',
+              conclusion: 'failure',
+              output: {
+                title: 'Ждёт отметки ревьюера',
+                summary:
+                  'Нужен комментарий `/merge-ok` или `/merge-ok ' + headSha.slice(0, 7) +
+                  '` от ревьюера на этом head SHA. Новый пуш сбрасывает отметку.',
+              },
+            };
+
+            if (existing.check_runs.length > 0) {
+              await github.rest.checks.update({ check_run_id: existing.check_runs[0].id, ...params });
+            } else {
+              await github.rest.checks.create(params);
+            }
+
+  ack-comment:
+    if: >
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '/merge-ok')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      checks: write
+      pull-requests: read
+    steps:
+      - name: Validate /merge-ok and mark review-ack as passing
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const body = context.payload.comment.body;
+            const match = body.match(/^\/merge-ok(?:[ \t]+([0-9a-fA-F]{7,40}))?[ \t]*$/m);
+            if (!match) {
+              core.info('Comment mentions /merge-ok but is not an exact command line; ignoring.');
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.issue.number,
+            });
+            const headSha = pr.head.sha;
+
+            const pinnedSha = match[1] ? match[1].toLowerCase() : null;
+            if (pinnedSha && !headSha.toLowerCase().startsWith(pinnedSha)) {
+              core.info(
+                `/merge-ok pinned to ${pinnedSha}, but current head is ${headSha}; ` +
+                'ack is stale, leaving review-ack as-is.'
+              );
+              return;
+            }
+
+            const { data: existing } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: headSha,
+              check_name: 'review-ack',
+            });
+
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'review-ack',
+              head_sha: headSha,
+              status: 'completed',
+              conclusion: 'success',
+              output: {
+                title: 'Ревьюер подтвердил актуальный коммит',
+                summary:
+                  `Подтверждено комментарием @${context.payload.comment.user.login} ` +
+                  `на ${headSha}: ${context.payload.comment.html_url}`,
+              },
+            };
+
+            if (existing.check_runs.length > 0) {
+              await github.rest.checks.update({ check_run_id: existing.check_runs[0].id, ...params });
+            } else {
+              await github.rest.checks.create(params);
+            }
