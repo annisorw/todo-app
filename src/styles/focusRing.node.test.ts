@@ -17,8 +17,10 @@ import { describe, expect, it } from 'vitest'
  * this file enforces is not "never suppress" but "never suppress without a
  * replacement, and name the replacement":
  *
- * 1. every suppression site in `src` is listed in `ALLOWED_SUPPRESSIONS`;
- * 2. every listed site still suppresses something, so entries cannot go stale;
+ * 1. every suppression in `src` is covered by an `ALLOWED_SUPPRESSIONS` entry —
+ *    matched by file *and* by the exact utility, not by file alone;
+ * 2. each entry matches exactly as many sites as it claims, so an entry can
+ *    neither go stale nor quietly cover a second, unreviewed element;
  * 3. the replacement treatment named by each entry still exists;
  * 4. `base.css` still defines the default ring the rest of the app relies on.
  *
@@ -30,15 +32,34 @@ import { describe, expect, it } from 'vitest'
 const SRC = join(process.cwd(), 'src')
 
 /**
- * Tailwind v4 renamed `outline-none` to `outline-hidden`; both still parse, so
- * both count. `outline: 0` is the hand-written CSS spelling of the same thing.
+ * Every spelling that takes the ring away. All of them are one `git grep` apart
+ * from each other, so missing one would make the guard worse than absent — it
+ * would promise cover it does not give.
+ *
+ * - `outline-none` / `outline-hidden`: the same Tailwind utility before and
+ *   after the v4 rename; both still parse.
+ * - `outline-0`: compiles to `outline-width: 0` at specificity `0,2,0`, which
+ *   beats `:focus-visible { outline: 2px solid ... }` from `base.css` (`0,1,0`).
+ *   The ring is gone just as completely, only the spelling differs.
+ * - `outline-transparent`: the ring is still drawn, in nothing.
+ *
+ * Leading variants (`focus:`, `focus-visible:`, `md:focus:`) are captured so a
+ * site is identified by the utility as written, not by a bare stem.
  * `outline-offset` and `outline: 2px solid ...` deliberately do not match.
  */
-const SUPPRESSION = /\boutline-(?:none|hidden)\b|\boutline\s*:\s*(?:none|0)\s*(?:;|$)/
+const SUPPRESSION_PATTERNS: readonly RegExp[] = [
+  /(?:[\w-]+:)*outline-(?:none|hidden|0|transparent)\b/g,
+  /outline\s*:\s*(?:none|0)\s*(?=;|$)/gm,
+  /outline-(?:width\s*:\s*0|color\s*:\s*transparent)\s*(?=;|$)/gm,
+]
 
 interface AllowedSuppression {
   /** Path relative to `src`, as the failure message prints it. */
   file: string
+  /** The suppressing utility or declaration exactly as written in that file. */
+  utility: string
+  /** How many elements in the file may carry it. Guards against a silent second site. */
+  occurrences: number
   /** Why the ring may go away here. */
   reason: string
   /** File carrying the replacement treatment — often a parent component. */
@@ -50,6 +71,8 @@ interface AllowedSuppression {
 const ALLOWED_SUPPRESSIONS: readonly AllowedSuppression[] = [
   {
     file: 'features/toolbar/SearchField.tsx',
+    utility: 'outline-none',
+    occurrences: 1,
     reason:
       'Spec 3.8: the focused state belongs to the whole field, so the ring moves from the bare input to the wrapper, which takes an accent border plus glow.',
     ringProvidedBy: 'features/toolbar/SearchField.tsx',
@@ -57,8 +80,10 @@ const ALLOWED_SUPPRESSIONS: readonly AllowedSuppression[] = [
   },
   {
     file: 'features/composer/ComposerFields.tsx',
+    utility: 'focus:outline-none',
+    occurrences: 1,
     reason:
-      'Spec 3.7: the composer card glows while its textarea has focus, so a second ring on the textarea itself would double the treatment.',
+      'Spec 3.7: the composer card glows while its textarea has focus, so a second ring on the textarea itself would double the treatment. Covers the desktop path only: ComposerSheet renders the same fields with no focus treatment of its own, so on mobile this suppression currently has no replacement — FELA-65 decides what the sheet shows, and this entry has to be revisited then.',
     ringProvidedBy: 'features/composer/Composer.tsx',
     marker: 'shadow-glow-accent',
   },
@@ -78,7 +103,12 @@ function sourceFiles(dir: string): string[] {
 interface Suppression {
   file: string
   line: number
-  text: string
+  /** The matched utility or declaration — what an allowlist entry has to name. */
+  utility: string
+}
+
+function suppressionsIn(text: string): string[] {
+  return SUPPRESSION_PATTERNS.flatMap((pattern) => text.match(pattern) ?? [])
 }
 
 const SUPPRESSIONS: readonly Suppression[] = sourceFiles(SRC).flatMap((path) => {
@@ -86,7 +116,7 @@ const SUPPRESSIONS: readonly Suppression[] = sourceFiles(SRC).flatMap((path) => 
   return readFileSync(path, 'utf8')
     .split('\n')
     .flatMap((text, index) =>
-      SUPPRESSION.test(text) ? [{ file, line: index + 1, text: text.trim() }] : [],
+      suppressionsIn(text).map((utility) => ({ file, line: index + 1, utility })),
     )
 })
 
@@ -99,10 +129,10 @@ describe('focus ring', () => {
   })
 
   it('is never suppressed outside the allowlist', () => {
-    const allowed = new Set(ALLOWED_SUPPRESSIONS.map((entry) => entry.file))
-    const offenders = SUPPRESSIONS.filter((found) => !allowed.has(found.file)).map(
-      (found) => `${found.file}:${found.line} — ${found.text}`,
-    )
+    const allowed = new Set(ALLOWED_SUPPRESSIONS.map((entry) => `${entry.file} ${entry.utility}`))
+    const offenders = SUPPRESSIONS.filter(
+      (found) => !allowed.has(`${found.file} ${found.utility}`),
+    ).map((found) => `${found.file}:${found.line} — ${found.utility}`)
 
     expect(
       offenders,
@@ -110,12 +140,14 @@ describe('focus ring', () => {
     ).toEqual([])
   })
 
-  it.each(ALLOWED_SUPPRESSIONS)('has a live replacement for $file', (entry) => {
-    const stillSuppresses = SUPPRESSIONS.some((found) => found.file === entry.file)
+  it.each(ALLOWED_SUPPRESSIONS)('has a live replacement for $file ($utility)', (entry) => {
+    const sites = SUPPRESSIONS.filter(
+      (found) => found.file === entry.file && found.utility === entry.utility,
+    )
     expect(
-      stillSuppresses,
-      `${entry.file} no longer suppresses the outline — drop its ALLOWED_SUPPRESSIONS entry instead of leaving it to cover a future one.`,
-    ).toBe(true)
+      sites.length,
+      `${entry.file} has ${sites.length} \`${entry.utility}\` site(s), the allowlist expects ${entry.occurrences}. More means a second element lost its ring under cover of this entry; fewer means the entry is stale and should be dropped rather than left to cover a future one.`,
+    ).toBe(entry.occurrences)
 
     const provider = readFileSync(join(SRC, entry.ringProvidedBy), 'utf8')
     expect(
