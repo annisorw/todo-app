@@ -1,5 +1,5 @@
 # Upstream provenance for the self-hosted fonts (FELA-32/FELA-35/FELA-37).
-# Reproduced byte-for-byte with fonttools==4.67.0 + brotli, 2026-10-20.
+# Reproduced byte-for-byte with fonttools==4.67.0 + brotli==1.2.0, 2026-10-20.
 # Releases: rsms/inter v4.1, JetBrains/JetBrainsMono v2.304.
 # Verify the committed .woff2 lines with: sha256sum -c src/assets/fonts/SOURCES.sha256
 # (the upstream .zip/.ttf lines are documentation only — those files are not in the repo).
