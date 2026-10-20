@@ -59,6 +59,11 @@
   --skeleton-base: rgba(255,255,255,.05);
   --skeleton-shine: rgba(255,255,255,.11);
 
+  /* Modal backdrop (spec 3.16). Decorative, carries no text, and the spec
+   * gives one value for both themes — same reasoning as --color-accent
+   * staying unlisted in the light block below. */
+  --color-modal-backdrop: rgba(3,3,10,.55);
+
   /* ---- 2.3 Gradient ------------------------------------------------------- */
   /* Text on --gradient-accent is forbidden: the cyan end gives 2.45:1 on white.
    * Allowed: AuroraBackground, ProgressRing fill, checked Checkbox, the `+`
@@ -190,10 +195,15 @@
   --z-modal: 300;
   --z-toast: 400;
 
-  /* ---- Component sizes off the 4 px grid (spec 3.10) ---------------------- */
+  /* ---- Component sizes off the 4 px grid (spec 3.10, 3.16, 3.24) ---------- */
   /* Checkbox circle diameter: 22 px desktop. Not a --space-* multiple, so it
    * gets its own token instead of an arbitrary value in the component. */
   --size-checkbox: 22px;
+  /* ConfirmDialog panel width (spec 3.16). */
+  --size-modal-md: 480px;
+  /* Fab diameter (spec 3.24). Fab itself isn't built yet, but the mobile
+   * toast viewport (spec 3.17) already needs to sit above it. */
+  --size-fab: 56px;
 }
 
 /* ---- 2.2 Colour — light --------------------------------------------------- */

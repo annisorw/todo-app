@@ -1,11 +1,11 @@
-import type { ComponentPropsWithoutRef } from 'react'
+import type { ComponentProps } from 'react'
 import { BUTTON_VARIANT_CLASSES, type ButtonVariant } from './button-variant'
 import { cn } from '../lib/cn'
 
 export type { ButtonVariant }
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
-export interface ButtonProps extends ComponentPropsWithoutRef<'button'> {
+export interface ButtonProps extends ComponentProps<'button'> {
   variant?: ButtonVariant
   size?: ButtonSize
   /** Spinner replaces nothing — the label stays and the button's width never jumps. */

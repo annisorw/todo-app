@@ -67,6 +67,7 @@ const NOT_A_FOREGROUND = [
   '--color-accent',
   '--color-accent-hover',
   '--color-accent-active',
+  '--color-modal-backdrop',
 ] as const
 
 /**
