@@ -1,0 +1,11 @@
+# Upstream provenance for the self-hosted fonts (FELA-32/FELA-35/FELA-37).
+# Reproduced byte-for-byte with fonttools==4.67.0 + brotli==1.2.0, 2026-10-20.
+# Releases: rsms/inter v4.1, JetBrains/JetBrainsMono v2.304.
+# Verify the committed .woff2 lines with: sha256sum -c src/assets/fonts/SOURCES.sha256
+# (the upstream .zip/.ttf lines are documentation only — those files are not in the repo).
+9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e  Inter-4.1.zip
+4989b125924991b90d05b2d16e0e388c48f7d5bb8b30539bbf9c755278d0ccaf  InterVariable.ttf
+6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf  JetBrainsMono-2.304.zip
+a0bf60ef0f83c5ed4d7a75d45838548b1f6873372dfac88f71804491898d138f  fonts/ttf/JetBrainsMono-Regular.ttf
+e40c555496e321a8a4f552dc62f64b209a66cadeeaf4b3879b51ea4c10a63552  src/assets/fonts/InterVariable.woff2
+dab0b5adcfaa1d6f2d5e721d7d49f6fa9c5703f40dab9233bd3e029472214379  src/assets/fonts/JetBrainsMono-Regular.woff2
