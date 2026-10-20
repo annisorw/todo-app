@@ -1,3 +1,5 @@
+import type { Ref } from 'react'
+
 function PlusIcon() {
   return (
     <svg viewBox="0 0 20 20" width="20" height="20" fill="none" aria-hidden="true">
@@ -8,6 +10,8 @@ function PlusIcon() {
 
 export interface FabProps {
   onClick: () => void
+  /** `ComposerSheet` returns focus here after Esc — the Fab is what opened it. */
+  ref?: Ref<HTMLButtonElement>
 }
 
 /**
@@ -17,9 +21,10 @@ export interface FabProps {
  * `--gradient-accent` is allowed here because the `+` is an icon, not text
  * (spec 2.3).
  */
-export function Fab({ onClick }: FabProps) {
+export function Fab({ onClick, ref }: FabProps) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       aria-label="Добавить задачу"

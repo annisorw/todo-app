@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { useRef } from 'react'
+import type { RefObject } from 'react'
 import { useDismissable } from '../../lib/useDismissable'
 import { useMediaQuery } from '../../lib/useMediaQuery'
 import { useOutsideClick } from '../../lib/useOutsideClick'
@@ -8,6 +9,8 @@ import type { ComposerFormController } from './useComposerForm'
 
 export interface ComposerSheetProps {
   form: ComposerFormController
+  /** The `Fab` that opened the sheet — where Esc puts focus back. */
+  triggerRef: RefObject<HTMLElement | null>
   onClose: () => void
 }
 
@@ -21,15 +24,17 @@ export interface ComposerSheetProps {
  *
  * The sheet is a layer in the app-wide Esc stack, and the chip popovers inside
  * it are layers on top of it: Esc closes the open popover first and the sheet
- * only on the next press. No `returnFocusTo` — the sheet has no trigger to
- * return focus to (the `Fab` stays where it is), so the layer leaves focus
- * alone, same as closing it by backdrop click.
+ * only on the next press. Esc returns focus to the `Fab` that opened the
+ * sheet: focus was inside the panel being unmounted, so without the handoff it
+ * would land on `<body>` and the next Tab would restart the page. A backdrop
+ * click leaves focus alone — that is the pointer path, and the stack's focus
+ * discipline only covers the keyboard one.
  */
-export function ComposerSheet({ form, onClose }: ComposerSheetProps) {
+export function ComposerSheet({ form, triggerRef, onClose }: ComposerSheetProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
 
-  useDismissable({ onDismiss: onClose })
+  useDismissable({ onDismiss: onClose, returnFocusTo: triggerRef })
   useOutsideClick({ onOutsideClick: onClose, inside: [panelRef] })
 
   return (

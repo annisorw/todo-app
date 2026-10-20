@@ -198,6 +198,21 @@ describe('Composer sheet + chip popover — two stacked Esc layers', () => {
     expect(screen.queryByRole('dialog', { name: 'Добавить задачу' })).not.toBeInTheDocument()
   })
 
+  it('returns focus to the Fab when Esc closes the sheet', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    const fab = screen.getByRole('button', { name: 'Добавить задачу' })
+    await user.click(fab)
+    expect(screen.getByRole('dialog', { name: 'Добавить задачу' })).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+
+    // Focus was inside the unmounted panel. Without the handoff it lands on
+    // `<body>` and the next Tab restarts the page from the top.
+    expect(fab).toHaveFocus()
+  })
+
   it('does not close the sheet underneath while a popover is open', async () => {
     const user = userEvent.setup()
     renderComposer()
