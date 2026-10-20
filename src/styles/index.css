@@ -1,7 +1,8 @@
 /* The only stylesheet the app entry point imports. Order matters: Tailwind first
- * (Preflight + utilities), then the tokens it reads, then the base layer that
- * consumes them. */
+ * (Preflight + utilities), then the self-hosted @font-face rules, then the tokens
+ * that name those families, then the base layer that consumes them. */
 @import 'tailwindcss';
+@import './fonts.css';
 @import './tokens.css';
 @import './base.css';
 

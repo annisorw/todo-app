@@ -4,6 +4,6 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tokens-test.tsbuildinfo",
     "types": ["node"]
   },
-  "include": ["src/styles/tokens.test.ts"],
+  "include": ["src/styles/tokens.test.ts", "src/styles/fonts.test.ts"],
   "exclude": []
 }
