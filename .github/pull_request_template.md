@@ -6,6 +6,11 @@
 
 <!-- Commands or steps to check the change locally -->
 
+## Merge gate
+
+- [ ] Я не мержу этот PR сам. Статус задачи в Paperclip переведён в `in_review`,
+      задача назначена на TechLead, и мерж делает он.
+
 ## Checklist
 
 - [ ] `npm run lint` passes
