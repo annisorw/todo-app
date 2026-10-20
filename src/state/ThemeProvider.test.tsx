@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import indexHtml from '../../index.html?raw'
 import { THEME_STORAGE_KEY, useTheme } from './ThemeContext'
 import { ThemeProvider } from './ThemeProvider'
 
@@ -162,22 +161,21 @@ describe('the inline bootstrap script', () => {
    * The script in index.html runs before the bundle, so it cannot import
    * THEME_STORAGE_KEY. This is the guard against the two drifting apart.
    */
-  const html = readFileSync(join(process.cwd(), 'index.html'), 'utf8')
 
   it('reads the same storage key as the provider', () => {
-    expect(html).toContain(`localStorage.getItem('${THEME_STORAGE_KEY}')`)
+    expect(indexHtml).toContain(`localStorage.getItem('${THEME_STORAGE_KEY}')`)
   })
 
   it('sets data-theme before the module script loads', () => {
-    const bootstrapAt = html.indexOf('document.documentElement.dataset.theme')
-    const moduleAt = html.indexOf('src="/src/main.tsx"')
+    const bootstrapAt = indexHtml.indexOf('document.documentElement.dataset.theme')
+    const moduleAt = indexHtml.indexOf('src="/src/main.tsx"')
 
     expect(bootstrapAt).toBeGreaterThan(-1)
     expect(bootstrapAt).toBeLessThan(moduleAt)
   })
 
   it('resolves the theme the same way the provider does', () => {
-    expect(html).toContain("stored === 'light' || stored === 'dark'")
-    expect(html).toContain("window.matchMedia('(prefers-color-scheme: light)')")
+    expect(indexHtml).toContain("stored === 'light' || stored === 'dark'")
+    expect(indexHtml).toContain("window.matchMedia('(prefers-color-scheme: light)')")
   })
 })

@@ -89,9 +89,13 @@ const PAIRS: Pair[] = [
 // --- tokens.css as the single source of values --------------------------------
 
 /**
- * Read from disk, not imported: Vitest stubs CSS imports, and the point of this
- * test is to measure what `tokens.css` actually says. Paths are relative to the
- * project root, which is Vitest's working directory.
+ * Read from disk, not imported: `@tailwindcss/vite` intercepts every `.css`
+ * load in this project, `?raw` query or not, and hands back empty content.
+ * Vitest stubs plain CSS imports too, so disk is the only way to see what
+ * `tokens.css` actually says. This file therefore has its own tsconfig project
+ * with Node types (see tsconfig.tokens-test.json) instead of pulling `node`
+ * into the whole app project. Paths are relative to the project root, which is
+ * Vitest's working directory.
  */
 const TOKENS_CSS = readFileSync(join(process.cwd(), 'src/styles/tokens.css'), 'utf8')
 
