@@ -27,8 +27,15 @@ export interface TaskStoreValue {
   restoreRemoved: () => void
   moveTask: (from: number, to: number) => void
   clearCompleted: () => void
-  /** Человек закрыл `ErrorBanner` (спека, S9). */
-  dismissStorageError: () => void
+  /**
+   * Человек нажал «Повторить» в `ErrorBanner` (спека, S9): записать текущий
+   * список прямо сейчас, не дожидаясь debounce.
+   *
+   * Исход виден по `storageError`: успех его снимает, отказ оставляет. Своего
+   * «просто закрыть баннер» в сторе нет нарочно — спека такой кнопки не даёт, а
+   * тихое закрытие и было дефектом [FELA-64](/FELA/issues/FELA-64).
+   */
+  retryPersist: () => void
 }
 
 export const TaskStoreContext = createContext<TaskStoreValue | null>(null)

@@ -72,13 +72,14 @@ function WarningIcon() {
  * `storage/taskStorage.ts` keeps (its own comments point straight at this
  * ticket, [FELA-18](/FELA/issues/FELA-18)).
  *
- * "Повторить" dismisses the error rather than forcing an immediate retry:
- * there's no `retryPersist` in the store (FELA-11 didn't add one), and the
- * next real change to the list will attempt the write again regardless. If
- * the underlying problem persists, the banner reappears on its own.
+ * "Повторить" really retries: `retryPersist` writes the current list right
+ * away and the banner closes only if that write succeeded. One behaviour for
+ * all three errors — for `blocked` the retry just fails with the same code,
+ * which is the honest answer, and for `quota` it is the whole point
+ * ([FELA-64](/FELA/issues/FELA-64)).
  */
 export function ErrorBanner({ className }: ErrorBannerProps) {
-  const { storageError, tasks, dismissStorageError } = useTaskStore()
+  const { storageError, tasks, retryPersist } = useTaskStore()
   const { pushToast } = useToast()
 
   if (storageError === null) return null
@@ -120,7 +121,7 @@ export function ErrorBanner({ className }: ErrorBannerProps) {
       </div>
 
       <div className="flex shrink-0 gap-(--space-2)">
-        <Button variant="secondary" size="sm" onClick={dismissStorageError}>
+        <Button variant="secondary" size="sm" onClick={retryPersist}>
           Повторить
         </Button>
         <Button variant="ghost" size="sm" onClick={handleExport}>

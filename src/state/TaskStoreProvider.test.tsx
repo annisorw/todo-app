@@ -23,7 +23,7 @@ function Probe() {
     addTask,
     removeTask,
     restoreRemoved,
-    dismissStorageError,
+    retryPersist,
   } = useTaskStore()
 
   return (
@@ -54,8 +54,8 @@ function Probe() {
       <button type="button" onClick={restoreRemoved}>
         undo
       </button>
-      <button type="button" onClick={dismissStorageError}>
-        dismiss
+      <button type="button" onClick={retryPersist}>
+        retry
       </button>
     </div>
   )
@@ -191,14 +191,46 @@ describe('TaskStoreProvider', () => {
     expect(readCorruptedBackup()).toEqual({ ok: true, value: truncated })
   })
 
-  it('lets the person dismiss the banner', async () => {
-    stub = stubLocalStorage({ items: storedItems('{{{') })
-    const user = userEvent.setup()
+  /**
+   * Критерий приёмки [FELA-64](/FELA/issues/FELA-64): место освободилось —
+   * «Повторить» действительно пишет, и в хранилище лежит актуальный конверт, а
+   * не только погасший баннер.
+   */
+  it('writes the current list on retry once the quota frees up', () => {
+    vi.useFakeTimers()
+    stub = stubLocalStorage()
+    // Первая запись (проход персиста после загрузки) падает по квоте, дальше
+    // хранилище снова работает.
+    stub.setItem.mockImplementationOnce(() => {
+      throw quotaError()
+    })
 
     renderStore()
-    await user.click(screen.getByRole('button', { name: 'dismiss' }))
+    click('add')
+    letPersistRun()
+    expect(screen.getByTestId('error')).toHaveTextContent('quota')
+
+    click('retry')
 
     expect(screen.getByTestId('error')).toHaveTextContent('none')
+    const stored: unknown = JSON.parse(stub.items.get(TASKS_STORAGE_KEY) ?? '')
+    expect(stored).toMatchObject({ version: 1, tasks: [{ title: 'Новая' }] })
+  })
+
+  it('keeps the banner up when the retry write fails again', () => {
+    vi.useFakeTimers()
+    stub = stubLocalStorage({ writeError: quotaError() })
+
+    renderStore()
+    click('add')
+    letPersistRun()
+    expect(screen.getByTestId('error')).toHaveTextContent('quota')
+
+    click('retry')
+
+    // Тихо прятать баннер без удавшейся записи и было дефектом задачи.
+    expect(screen.getByTestId('error')).toHaveTextContent('quota')
+    expect(titles()).toEqual(['Новая'])
   })
 
   // Критерии приёмки 9 и 29 спеки, через настоящий цикл «поработали — перезагрузили».

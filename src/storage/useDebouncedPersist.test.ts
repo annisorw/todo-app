@@ -118,4 +118,56 @@ describe('useDebouncedPersist', () => {
 
     expect(onError).not.toHaveBeenCalled()
   })
+
+  describe('persistNow', () => {
+    it('writes the current list without waiting for the debounce', () => {
+      stub = stubLocalStorage()
+      const { result } = renderPersist(makeTasks(2))
+
+      const error = result.current()
+
+      expect(error).toBeNull()
+      expect(stub.setItem).toHaveBeenCalledOnce()
+      const raw = stub.items.get(TASKS_STORAGE_KEY) ?? ''
+      expect(JSON.parse(raw)).toEqual({ version: 1, tasks: makeTasks(2) })
+    })
+
+    it('hands the failure back to the caller instead of onError', () => {
+      stub = stubLocalStorage({ writeError: quotaError() })
+      const { result, onError } = renderPersist(makeTasks(1))
+
+      expect(result.current()).toBe('quota')
+      // Успех должен быть виден вызывающему, поэтому оба исхода идут возвратом,
+      // а не через `onError` ([FELA-64](/FELA/issues/FELA-64)).
+      expect(onError).not.toHaveBeenCalled()
+    })
+
+    it('writes the latest list, not the one pending when the timer last fired', () => {
+      stub = stubLocalStorage()
+      const { result, rerender } = renderPersist(makeTasks(1))
+
+      act(() => {
+        vi.advanceTimersByTime(PERSIST_DEBOUNCE_MS)
+      })
+      act(() => {
+        rerender({ value: makeTasks(3) })
+      })
+      result.current()
+
+      const raw = stub.items.get(TASKS_STORAGE_KEY) ?? ''
+      expect(JSON.parse(raw)).toEqual({ version: 1, tasks: makeTasks(3) })
+    })
+
+    it('does not let the pending timer repeat the same write', () => {
+      stub = stubLocalStorage()
+      const { result } = renderPersist(makeTasks(1))
+
+      result.current()
+      act(() => {
+        vi.advanceTimersByTime(PERSIST_DEBOUNCE_MS)
+      })
+
+      expect(stub.setItem).toHaveBeenCalledOnce()
+    })
+  })
 })
