@@ -50,6 +50,24 @@ body {
   }
 }
 
+/* ---- `aurora-drift` keyframes (spec 3.2, motion table 5) ------------------ */
+/* `AuroraBackground` applies this utility only outside
+ * `prefers-reduced-motion` (checked in JS via `useMediaQuery`, not here),
+ * since the spec calls for the drift to be fully absent, not just shortened
+ * by the blanket reduced-motion rule below. */
+@keyframes aurora-drift {
+  from {
+    translate: calc(var(--space-10) * -1) calc(var(--space-10) * -1);
+  }
+  to {
+    translate: var(--space-10) var(--space-10);
+  }
+}
+
+@utility animate-aurora-drift {
+  animation: aurora-drift var(--duration-aurora-drift) ease-in-out alternate infinite;
+}
+
 /* ---- Baseline reduced-motion rule (spec 5) -------------------------------- */
 /* Per-animation behaviour is specified row by row in the spec's motion table;
  * this is the floor that applies even to code that forgets about it. */
