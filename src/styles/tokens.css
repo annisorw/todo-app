@@ -183,8 +183,8 @@
   --layout-gutter: var(--space-6);
 
   --z-base: 0;
-  --z-content: 10;
-  --z-sticky: 20;
+  --z-content: 1;
+  --z-sticky: 10;
   --z-dropdown: 100;
   --z-drag: 200;
   --z-modal: 300;
