@@ -30,7 +30,7 @@ export function Hero({ date, summary, progressSlot }: HeroProps) {
   const effectiveDate = date ?? today
 
   return (
-    <section className="flex flex-col gap-(--space-4) py-(--space-6) sm:flex-row sm:items-end sm:justify-between">
+    <section className="flex flex-col gap-(--space-4) sm:flex-row sm:items-end sm:justify-between">
       <div className="flex flex-col gap-(--space-2)">
         <p className="text-micro uppercase text-tertiary">{formatEyebrow(effectiveDate)}</p>
         <h1 className="text-display text-primary">Сегодня</h1>
