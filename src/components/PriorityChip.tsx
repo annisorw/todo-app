@@ -1,13 +1,6 @@
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react'
+import type { Priority } from '../domain/task'
 import { cn } from '../lib/cn'
-
-/**
- * Mirrors `domain/task.ts`'s `Priority` (not imported: that module is being
- * built in a parallel task and isn't on `main` yet). Swap this for a
- * type-only import once it lands — the acceptance criteria allow that, they
- * just forbid importing anything else from `domain/`.
- */
-export type Priority = 'none' | 'low' | 'medium' | 'high'
 
 export type ChipVariant = 'static' | 'interactive'
 

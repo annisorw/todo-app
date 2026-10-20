@@ -1,13 +1,6 @@
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react'
+import type { DueDateStatus } from '../domain/dueDate'
 import { cn } from '../lib/cn'
-
-/**
- * Mirrors `domain/dueDate.ts`'s `DueDateStatus` (not imported: that module is
- * being built in a parallel task and isn't on `main` yet). Swap this for a
- * type-only import once it lands — the acceptance criteria allow that, they
- * just forbid importing anything else from `domain/`.
- */
-export type DueDateStatus = 'none' | 'invalid' | 'overdue' | 'today' | 'upcoming'
 
 export type ChipVariant = 'static' | 'interactive'
 

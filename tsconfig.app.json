@@ -25,5 +25,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  "exclude": ["src/styles/tokens.test.ts", "src/styles/fonts.test.ts"]
+  "exclude": ["src/styles/tokens.test.ts", "src/styles/fonts.test.ts", "src/components/Skeleton.test.tsx"]
 }
