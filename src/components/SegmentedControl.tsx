@@ -32,10 +32,7 @@ export interface SegmentedControlProps {
  *
  * Counter colour is fixed by design-spec v1.4: unselected ->
  * `--color-text-secondary`, selected -> `--color-text-primary`, count 0 ->
- * `--color-text-tertiary` regardless of selection. The counter is deliberately
- * NOT `font-mono`/`text-mono-num` yet — that class ships in FELA-54 (not yet
- * on `main`); wiring it here early would risk a synthetic-bold weight on
- * JetBrains Mono per the spec addendum. Pick it up once FELA-54 lands.
+ * `--color-text-tertiary` regardless of selection.
  */
 export function SegmentedControl({
   options,
@@ -118,7 +115,12 @@ export function SegmentedControl({
               />
             )}
             <span>{option.label}</span>{' '}
-            <span className={cn('text-caption', empty ? 'text-tertiary' : selected ? 'text-primary' : 'text-secondary')}>
+            <span
+              className={cn(
+                'text-caption text-mono-num',
+                empty ? 'text-tertiary' : selected ? 'text-primary' : 'text-secondary',
+              )}
+            >
               {option.count}
             </span>
           </button>
