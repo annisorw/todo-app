@@ -22,3 +22,4 @@ npm run test        # run the test suite
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — folder layout, data model, state and storage contract. Read this before writing code.
 - [`docs/design-spec.md`](docs/design-spec.md) — design tokens, components, screen states and acceptance criteria.
+- [`docs/CODE-RULES.md`](docs/CODE-RULES.md) — binding code rules: what must never turn a string into HTML or code, how search highlighting works, how `localStorage` is validated, and what may go into the public build.
