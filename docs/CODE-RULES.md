@@ -77,17 +77,22 @@ shape. The `todo-app:` prefix of the scaffold placeholder is gone.
 
 - `JSON.parse(raw) as Task[]` is a lie to the compiler — `as` checks nothing. Parse with a
   validating parser that rebuilds each object from known fields and drops invalid entries.
-- Cap title length (500 characters) and item count (1000). Both limits are defined once, in
-  the storage module owned by FELA-11, and imported by the parser, the writer and the input
-  `maxLength`. Two copies of the same number will drift.
+- Cap title length and item count. Every limit is declared exactly once, in
+  `src/domain/limits.ts`: `MAX_TITLE_LENGTH` (500), `MAX_TASKS` (1000), `MAX_QUERY_LENGTH`
+  (100). The storage parser, the storage writer, the composer input `maxLength` and the
+  search field all import from there. Do not restate one of these numbers anywhere else —
+  two copies of the same number will drift.
 - Wrap writes in `try`/`catch` and handle `QuotaExceededError`. Never let a full quota crash
   the app.
 - Regression tests are mandatory for: broken JSON, non-array payload, item with missing
   fields, non-string `title`, over-limit text, and a todo titled
   `<img src=x onerror=alert(1)>` rendering as text.
 
-Allowed in `localStorage`: todo text, the done flag, ids, order, UI filter/sort, theme,
-schema version. Forbidden: tokens, API keys, JWTs, passwords, personal data, cross-site
+Allowed in `localStorage`: the fields of `Task` as declared in `src/domain/task.ts` — `id`,
+`title`, `priority`, `dueDate`, `completedAt`, `createdAt` — plus the UI filter, the theme
+and the schema version. Completion is the `completedAt` timestamp, not a `done` flag, and
+list order is the position in the stored array, not an `order` field; the parser must not
+invent either one. Forbidden: tokens, API keys, JWTs, passwords, personal data, cross-site
 analytics ids, anything private. If server sync is ever added, a token in `localStorage` is
 not an option — that is a separate ticket with a Security review.
 
