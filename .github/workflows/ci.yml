@@ -73,7 +73,7 @@ jobs:
             if [ "$allowed" = false ]; then
               violations+=("$path")
             fi
-          done < <(git diff --numstat "${BASE_SHA}..${HEAD_SHA}")
+          done < <(git diff --diff-filter=ACMR --numstat "${BASE_SHA}...${HEAD_SHA}")
 
           if [ "${#violations[@]}" -gt 0 ]; then
             echo "Binary file(s) outside .github/binary-allowlist.txt were added or changed in this diff:"

@@ -3,4 +3,3 @@
 # allowlist change is visible on review. See .github/workflows/ci.yml,
 # job "ci", step "Check for unapproved binary files".
 src/assets/fonts/*.woff2
-docs/verification/*.png
