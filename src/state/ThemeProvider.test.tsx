@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import indexHtml from '../../index.html?raw'
 import { THEME_STORAGE_KEY, useTheme } from './ThemeContext'
 import { ThemeProvider } from './ThemeProvider'
 
@@ -162,7 +161,7 @@ describe('the inline bootstrap script', () => {
    * The script in index.html runs before the bundle, so it cannot import
    * THEME_STORAGE_KEY. This is the guard against the two drifting apart.
    */
-  const html = readFileSync(join(process.cwd(), 'index.html'), 'utf8')
+  const html = indexHtml
 
   it('reads the same storage key as the provider', () => {
     expect(html).toContain(`localStorage.getItem('${THEME_STORAGE_KEY}')`)
