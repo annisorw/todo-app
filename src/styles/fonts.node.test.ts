@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
  * does not fail if that family has no matching `@font-face` — the browser just
  * falls through to the next family in the stack (`system-ui`, `ui-monospace`, ...)
  * and nobody notices until someone compares a screenshot to the spec. This test
- * reads both files from disk, the way `tokens.test.ts` does, so it has to fail if
+ * reads both files from disk, the way `tokens.node.test.ts` does, so it has to fail if
  * either file's family name drifts from the other.
  */
 
