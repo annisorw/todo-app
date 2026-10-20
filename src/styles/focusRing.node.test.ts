@@ -62,8 +62,8 @@ interface AllowedSuppression {
   occurrences: number
   /** Why the ring may go away here. */
   reason: string
-  /** File carrying the replacement treatment — often a parent component. */
-  ringProvidedBy: string
+  /** Files carrying the replacement treatment — often parent components. */
+  ringProvidedBy: readonly string[]
   /** Class or declaration that *is* the replacement, asserted to still exist. */
   marker: string
 }
@@ -75,16 +75,16 @@ const ALLOWED_SUPPRESSIONS: readonly AllowedSuppression[] = [
     occurrences: 1,
     reason:
       'Spec 3.8: the focused state belongs to the whole field, so the ring moves from the bare input to the wrapper, which takes an accent border plus glow.',
-    ringProvidedBy: 'features/toolbar/SearchField.tsx',
+    ringProvidedBy: ['features/toolbar/SearchField.tsx'],
     marker: 'border-accent-text shadow-glow-accent',
   },
   {
-    file: 'features/composer/ComposerFields.tsx',
-    utility: 'focus:outline-none',
+    file: 'features/composer/ComposerTextarea.tsx',
+    utility: 'focus-visible:outline-none',
     occurrences: 1,
     reason:
-      'Spec 3.7: the composer card glows while its textarea has focus, so a second ring on the textarea itself would double the treatment. Covers the desktop path only: ComposerSheet renders the same fields with no focus treatment of its own, so on mobile this suppression currently has no replacement — FELA-65 decides what the sheet shows, and this entry has to be revisited then.',
-    ringProvidedBy: 'features/composer/Composer.tsx',
+      'Spec 3.7/3.8: the shared textarea glows via its wrapper on both call sites, so a second ring on the textarea itself would double the treatment — the desktop card glows directly, the sheet wraps the field in its own bordered box (same pattern as SearchField).',
+    ringProvidedBy: ['features/composer/Composer.tsx', 'features/composer/ComposerSheet.tsx'],
     marker: 'shadow-glow-accent',
   },
 ]
@@ -149,10 +149,12 @@ describe('focus ring', () => {
       `${entry.file} has ${sites.length} \`${entry.utility}\` site(s), the allowlist expects ${entry.occurrences}. More means a second element lost its ring under cover of this entry; fewer means the entry is stale and should be dropped rather than left to cover a future one.`,
     ).toBe(entry.occurrences)
 
-    const provider = readFileSync(join(SRC, entry.ringProvidedBy), 'utf8')
-    expect(
-      provider,
-      `${entry.file} drops the focus ring because ${entry.ringProvidedBy} replaces it (${entry.reason}) — that replacement is gone, so the field now has no focus indicator.`,
-    ).toContain(entry.marker)
+    for (const path of entry.ringProvidedBy) {
+      const provider = readFileSync(join(SRC, path), 'utf8')
+      expect(
+        provider,
+        `${entry.file} drops the focus ring because ${path} replaces it (${entry.reason}) — that replacement is gone, so the field now has no focus indicator.`,
+      ).toContain(entry.marker)
+    }
   })
 })
