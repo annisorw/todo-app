@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { readRaw, writeRaw } from '../storage/localStorageDriver'
 import {
   DEFAULT_THEME,
   LIGHT_SCHEME_QUERY,
@@ -14,27 +15,21 @@ function isTheme(value: unknown): value is Theme {
 }
 
 /**
- * `localStorage` throws instead of returning null in private mode and when the
- * origin is blocked, so both directions are guarded. The theme is a preference,
- * not data: losing it degrades to the OS preference and the app keeps working.
+ * Both directions go through `storage/localStorageDriver`, the single place
+ * allowed to touch `localStorage`: in private mode and on a blocked origin it
+ * throws, and the driver turns that into a value instead of an exception.
+ *
+ * Unlike the task list, a failure here raises no `ErrorBanner`. The theme is a
+ * preference, not data — losing it degrades to the OS preference and the app
+ * keeps working, and the driver has already logged the cause in a dev build.
  */
 function readStoredTheme(): Theme | null {
-  try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY)
-    return isTheme(stored) ? stored : null
-  } catch {
-    return null
-  }
+  const result = readRaw(THEME_STORAGE_KEY)
+  return result.ok && isTheme(result.value) ? result.value : null
 }
 
 function writeStoredTheme(theme: Theme): void {
-  try {
-    localStorage.setItem(THEME_STORAGE_KEY, theme)
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn(`Could not persist the theme under "${THEME_STORAGE_KEY}".`, error)
-    }
-  }
+  writeRaw(THEME_STORAGE_KEY, theme)
 }
 
 function systemTheme(): Theme {
