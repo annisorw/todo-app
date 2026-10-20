@@ -68,6 +68,35 @@ body {
   animation: aurora-drift var(--duration-aurora-drift) ease-in-out alternate infinite;
 }
 
+/* ---- Skeleton shimmer (spec 3.19 / motion table row "skeleton-shimmer") --- */
+/* Plain CSS, not a Tailwind utility: the 1400ms duration and the three-stop
+ * gradient aren't on any token scale, and `prefers-reduced-motion` needs to
+ * drop the gradient entirely (a static backing), not just freeze it — the
+ * global reduced-motion rule below only shortens animations, which would
+ * otherwise leave a frozen shimmer band instead of a flat fill. */
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-row {
+  background-color: var(--skeleton-base);
+  background-image: linear-gradient(90deg, var(--skeleton-base) 0%, var(--skeleton-shine) 50%, var(--skeleton-base) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1400ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-row {
+    background-image: none;
+    animation: none;
+  }
+}
+
 /* ---- Baseline reduced-motion rule (spec 5) -------------------------------- */
 /* Per-animation behaviour is specified row by row in the spec's motion table;
  * this is the floor that applies even to code that forgets about it. */
