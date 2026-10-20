@@ -14,20 +14,48 @@ function pressEscape(): void {
   document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
 }
 
+/** Сосед-слушатель: тип приходит переменной, чтобы снятие не забылось. */
+function listen(target: EventTarget, type: string, capture = false): ReturnType<typeof vi.fn> {
+  const spy = vi.fn()
+  target.addEventListener(type, spy, capture)
+  pending.push(() => {
+    target.removeEventListener(type, spy, capture)
+  })
+  return spy
+}
+
 afterEach(() => {
   while (pending.length > 0) pending.pop()?.()
 })
 
 describe('dismissStack', () => {
   it('is closed and silent with no layers — Escape reaches document listeners', () => {
-    const outer = vi.fn()
-    document.addEventListener('keydown', outer)
+    const outer = listen(document, 'keydown')
 
     expect(isDismissableOpen()).toBe(false)
     pressEscape()
     expect(outer).toHaveBeenCalledTimes(1)
+  })
 
-    document.removeEventListener('keydown', outer)
+  // Что именно «не видит» нажатие — это измеримо, а не на словах: до React-дерева
+  // и до обработчиков на элементах Esc не доходит, но сосед на самом `document` в
+  // фазе перехвата его получит, потому что `stopPropagation` не трогает
+  // слушателей на том же узле. Сосед регистрируется **после** стека — порядок на
+  // одном узле решает только `stopImmediatePropagation`, которого здесь нет.
+  it('hides Escape from the bubble phase and from elements, but not from a capture-phase neighbour on document', () => {
+    const layer = vi.fn()
+    open(layer)
+
+    const documentCapture = listen(document, 'keydown', true)
+    const documentBubble = listen(document, 'keydown')
+    const bodyBubble = listen(document.body, 'keydown')
+
+    pressEscape()
+
+    expect(layer).toHaveBeenCalledTimes(1)
+    expect(documentCapture).toHaveBeenCalledTimes(1)
+    expect(documentBubble).not.toHaveBeenCalled()
+    expect(bodyBubble).not.toHaveBeenCalled()
   })
 
   it('dismisses only the top layer, one layer per Escape', () => {
