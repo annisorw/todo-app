@@ -14,6 +14,15 @@ import { describe, expect, it } from 'vitest'
 
 const TEXT_MIN_RATIO = 4.5
 const CONTROL_MIN_RATIO = 3
+/**
+ * The skeleton is decor and carries no text, so the WCAG minimums do not apply.
+ * This floor exists for a different failure: a translucent skeleton token that
+ * is merely inherited from the other theme composites to *exactly* its own
+ * surface (ratio 1.00) and vanishes. 1.1 sits below the weakest real value
+ * (dark base, 1.14:1) so it does not pin the design, and far enough above 1.00
+ * to catch the inheritance bug.
+ */
+const SKELETON_MIN_RATIO = 1.1
 
 const SURFACE = '--color-surface-1-solid'
 
@@ -58,9 +67,15 @@ const NOT_A_FOREGROUND = [
   '--color-accent',
   '--color-accent-hover',
   '--color-accent-active',
-  '--skeleton-base',
-  '--skeleton-shine',
 ] as const
+
+/**
+ * Translucent, so they are measured after compositing rather than as-is. Order
+ * matters and is asserted below: base is the trough, shine is the moving
+ * highlight (spec 2.2, `skeleton-shimmer` in 2.9).
+ */
+const SKELETON_BASE = '--skeleton-base'
+const SKELETON_SHINE = '--skeleton-shine'
 
 interface Pair {
   foreground: string
@@ -194,6 +209,37 @@ function tokenColor(tokens: Record<string, string>, name: string): Rgb {
   return parseHexColor(value)
 }
 
+// --- translucent tokens, measured after compositing ---------------------------
+
+/** `rgba(r,g,b,a)` with the alpha written either as `.12` or `0.12`. */
+function parseRgbaColor(value: string): { color: Rgb; alpha: number } {
+  const match = /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d*\.?\d+)\s*\)$/i.exec(value)
+  if (!match) {
+    throw new Error(`Expected an rgba() colour, got "${value}".`)
+  }
+  const [, red, green, blue, alpha] = match
+  return {
+    color: [Number(red), Number(green), Number(blue)],
+    alpha: Number(alpha),
+  }
+}
+
+/** Source-over compositing: what the eye actually sees on an opaque backdrop. */
+function compositeOver(foreground: Rgb, alpha: number, background: Rgb): Rgb {
+  return [0, 1, 2].map((channel) =>
+    Math.round(foreground[channel]! * alpha + background[channel]! * (1 - alpha)),
+  ) as unknown as Rgb
+}
+
+function compositedToken(tokens: Record<string, string>, name: string, onto: Rgb): Rgb {
+  const value = tokens[name]
+  if (value === undefined) {
+    throw new Error(`tokens.css does not define ${name}.`)
+  }
+  const { color, alpha } = parseRgbaColor(value)
+  return compositeOver(color, alpha, onto)
+}
+
 // --- the checks ---------------------------------------------------------------
 
 describe.each(Object.entries(THEMES))('contrast — %s theme', (_themeName, tokens) => {
@@ -204,12 +250,41 @@ describe.each(Object.entries(THEMES))('contrast — %s theme', (_themeName, toke
   })
 })
 
+/**
+ * Guards the bug that shipped once already: the light theme inherited the dark
+ * skeleton (white at 5%/11%), which composites to pure white on a white
+ * surface. Nothing errors, nothing looks broken in dark, and the loading state
+ * is simply blank until someone screenshots light mode.
+ */
+describe.each(Object.entries(THEMES))('skeleton — %s theme', (_themeName, tokens) => {
+  const surface = tokenColor(tokens, SURFACE)
+  const base = compositedToken(tokens, SKELETON_BASE, surface)
+  const shine = compositedToken(tokens, SKELETON_SHINE, surface)
+
+  it('keeps the base visible against the surface it sits on', () => {
+    expect(contrastRatio(base, surface)).toBeGreaterThanOrEqual(SKELETON_MIN_RATIO)
+  })
+
+  it('keeps the shimmer visible against the base', () => {
+    expect(contrastRatio(shine, base)).toBeGreaterThanOrEqual(SKELETON_MIN_RATIO)
+  })
+
+  it('puts the shine lighter than the base, whichever way the alphas run', () => {
+    // The one rule that holds in both themes: dark reaches it with a *stronger*
+    // white, light with a *weaker* ink. Comparing alphas instead of the
+    // composited result is what makes people "fix" the light theme backwards.
+    expect(relativeLuminance(shine)).toBeGreaterThan(relativeLuminance(base))
+  })
+})
+
 describe('coverage', () => {
   it('classifies every colour token as checked or decorative', () => {
     const classified = new Set<string>([
       ...FOREGROUND_ON_SURFACE,
       ...CONTROL_ON_SURFACE,
       ...NOT_A_FOREGROUND,
+      SKELETON_BASE,
+      SKELETON_SHINE,
       '--color-accent-contrast',
     ])
 
@@ -246,5 +321,14 @@ describe('the contrast check itself', () => {
 
   it('refuses to measure a translucent token', () => {
     expect(() => tokenColor(DARK_TOKENS, '--color-surface-1')).toThrow(/opaque hex colour/)
+  })
+
+  it('fails the skeleton check when the light theme inherits the dark values', () => {
+    // The exact bug this guards. Dark's white .05 on light's white surface is
+    // white: ratio 1.00. If this ever clears the floor, the check is asleep.
+    const lightSurface = tokenColor(LIGHT_TOKENS, SURFACE)
+    const inherited = compositeOver(parseRgbaColor('rgba(255,255,255,.05)').color, 0.05, lightSurface)
+
+    expect(contrastRatio(inherited, lightSurface)).toBeLessThan(SKELETON_MIN_RATIO)
   })
 })
