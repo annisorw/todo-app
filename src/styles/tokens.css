@@ -189,6 +189,11 @@
   --z-drag: 200;
   --z-modal: 300;
   --z-toast: 400;
+
+  /* ---- Component sizes off the 4 px grid (spec 3.10) ---------------------- */
+  /* Checkbox circle diameter: 22 px desktop. Not a --space-* multiple, so it
+   * gets its own token instead of an arbitrary value in the component. */
+  --size-checkbox: 22px;
 }
 
 /* ---- 2.2 Colour — light --------------------------------------------------- */
@@ -259,6 +264,9 @@
     --layout-header-h: 56px;
     --layout-row-h: 64px;
     --layout-gutter: var(--space-4);
+
+    /* Checkbox circle diameter: 26 px on mobile (spec 3.10). */
+    --size-checkbox: 26px;
   }
 }
 
