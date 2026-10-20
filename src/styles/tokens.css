@@ -223,6 +223,13 @@
   --color-success: #0F7A55;
   --color-danger: #C01B41;
 
+  /* The shine is lighter than the base in both themes, so here — on a light
+   * surface — the shine alpha is the *smaller* one. Inverting them to "shine is
+   * stronger" draws a dark band and the skeleton reads as a layout defect.
+   * Composited on --color-surface-1-solid: #E2E2E4 (1.29:1) and #F5F5F6. */
+  --skeleton-base: rgba(17,17,34,.12);
+  --skeleton-shine: rgba(17,17,34,.04);
+
   /* ---- 2.7 Shadow — light ------------------------------------------------- */
   --shadow-xs: 0 1px 2px rgba(17,17,34,.05);
   --shadow-sm: 0 2px 8px rgba(17,17,34,.07);
