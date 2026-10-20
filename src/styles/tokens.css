@@ -187,8 +187,8 @@
   --layout-gutter: var(--space-6);
 
   --z-base: 0;
-  --z-content: 10;
-  --z-sticky: 20;
+  --z-content: 1;
+  --z-sticky: 10;
   --z-dropdown: 100;
   --z-drag: 200;
   --z-modal: 300;
@@ -278,8 +278,8 @@
 /* Most tokens above already produce theme-aware utilities, because Tailwind
  * compiles them to a `var()` reference: `bg-surface-1`, `border-surface-border`,
  * `rounded-lg`, `text-body`, `ease-out-soft`, `max-w-(--layout-content-max)`.
- * Two groups need help, and both are about staying theme-aware rather than about
- * adding new values.
+ * Three groups need help, and all three are about staying theme-aware rather
+ * than about adding new values.
  *
  * 1. Text colours. Tailwind's text-colour utility is also `text-*`, so the
  *    spec's `--color-text-secondary` would have to be written
@@ -291,6 +291,10 @@
  *    geometry and colour under `[data-theme='light']` — wrong, and invisible
  *    until someone screenshots the light theme. Overriding the utilities makes
  *    `shadow-md` read the token, so there is no silently-wrong spelling.
+ *
+ * 3. Gradients. `--gradient-accent` is a `background-image`, not a colour, so
+ *    Tailwind's variable shorthand on `bg-*` (`background-color`) would set the
+ *    wrong property. This utility gives it a name that sets the right one.
  *
  * Tokens with no Tailwind namespace (`--duration-*`, `--z-*`, `--space-*`,
  * `--layout-*`, `--blur-*`) are used via `var()` in component CSS or via
@@ -341,4 +345,7 @@
   --tw-font-weight: var(--font-mono--font-weight);
   font-weight: var(--font-mono--font-weight);
   font-variant-numeric: tabular-nums;
+}
+@utility bg-gradient-accent {
+  background-image: var(--gradient-accent);
 }
