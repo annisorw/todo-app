@@ -52,6 +52,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Verify committed font binaries match the pinned manifest
+        run: |
+          grep -E 'src/assets/fonts/.*\.woff2$' src/assets/fonts/SOURCES.sha256 | sha256sum -c -
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
