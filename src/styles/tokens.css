@@ -85,6 +85,10 @@
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   /* Counters and <kbd> only. */
   --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  /* The only static cut of JetBrains Mono in the repo is 400 (fonts.css); a
+   * heavier weight is the browser faking bold by outlining the glyph, which
+   * shows as a blurred digit at 11-13 px (design-spec v1.4, criterion 35). */
+  --font-mono--font-weight: 400;
 
   --text-display: 40px;
   --text-display--line-height: 44px;
@@ -321,4 +325,15 @@
 }
 @utility shadow-drag {
   box-shadow: var(--shadow-drag);
+}
+
+/* The only entry point into mono (CODE-RULES.md section 8): weight is pinned
+ * to --font-mono--font-weight, never inherited from a surrounding text-* token
+ * (design-spec v1.4, criterion 35), and tabular-nums is bundled in because it
+ * is the reason counters use mono at all — a digit must not reflow the layout
+ * on 9 -> 10. */
+@utility text-mono-num {
+  font-family: var(--font-mono);
+  font-weight: var(--font-mono--font-weight);
+  font-variant-numeric: tabular-nums;
 }

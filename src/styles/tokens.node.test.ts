@@ -332,3 +332,23 @@ describe('the contrast check itself', () => {
     expect(contrastRatio(inherited, lightSurface)).toBeLessThan(SKELETON_MIN_RATIO)
   })
 })
+
+/**
+ * Mono always weighs 400 (design-spec v1.4, acceptance criterion 35, FELA-54).
+ * The repository ships only the 400 static cut of JetBrains Mono (fonts.css);
+ * anything heavier is the browser faking bold. This guards both directions of
+ * the mistake: the mono weight drifting off 400, and someone "fixing" the
+ * small-text hierarchy by flattening it to 400 too — text-caption/label/micro
+ * are tuned for Inter and are explicitly out of scope here (spec 2.5).
+ */
+describe('mono font weight', () => {
+  it('pins --font-mono--font-weight to 400', () => {
+    expect(DARK_TOKENS['--font-mono--font-weight']).toBe('400')
+  })
+
+  it('leaves the Inter text-* weights untouched', () => {
+    expect(DARK_TOKENS['--text-caption--font-weight']).toBe('500')
+    expect(DARK_TOKENS['--text-label--font-weight']).toBe('550')
+    expect(DARK_TOKENS['--text-micro--font-weight']).toBe('600')
+  })
+})
