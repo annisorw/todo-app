@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Fab } from '../../layout/Fab'
 import { useTaskStore } from '../../state/useTaskStore'
 import { cn } from '../../lib/cn'
@@ -16,6 +16,7 @@ export function Composer() {
   const { addTask, isAtLimit } = useTaskStore()
   const form = useComposerForm({ addTask, isAtLimit })
   const [sheetOpen, setSheetOpen] = useState(false)
+  const fabRef = useRef<HTMLButtonElement>(null)
 
   return (
     <>
@@ -30,10 +31,12 @@ export function Composer() {
       </div>
 
       <div className="sm:hidden">
-        <Fab onClick={() => setSheetOpen(true)} />
+        <Fab ref={fabRef} onClick={() => setSheetOpen(true)} />
       </div>
 
-      {sheetOpen && <ComposerSheet form={form} onClose={() => setSheetOpen(false)} />}
+      {sheetOpen && (
+        <ComposerSheet form={form} triggerRef={fabRef} onClose={() => setSheetOpen(false)} />
+      )}
     </>
   )
 }
