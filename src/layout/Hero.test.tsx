@@ -13,6 +13,6 @@ describe('Hero', () => {
 
     const section = screen.getByText('Сводка').closest('section') as HTMLElement
 
-    expect(section.className).not.toMatch(/\bpy-/)
+    expect(section.className).not.toMatch(/\bp[ytb]-/)
   })
 })
