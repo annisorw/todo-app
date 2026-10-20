@@ -1,6 +1,7 @@
 import type { StorageError } from '../storage/localStorageDriver'
 import { readCorruptedBackup } from '../storage/taskStorage'
 import { useTaskStore } from '../state/useTaskStore'
+import { useToast } from '../state/ToastProvider'
 import { Button } from './Button'
 import { cn } from '../lib/cn'
 
@@ -41,8 +42,11 @@ function downloadJson(filename: string, content: string): void {
   const link = document.createElement('a')
   link.href = url
   link.download = filename
+  document.body.appendChild(link)
   link.click()
-  URL.revokeObjectURL(url)
+  link.remove()
+  // Revoking in the same tick as the click can abort the download in Firefox.
+  window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 function WarningIcon() {
@@ -75,6 +79,7 @@ function WarningIcon() {
  */
 export function ErrorBanner({ className }: ErrorBannerProps) {
   const { storageError, tasks, dismissStorageError } = useTaskStore()
+  const { pushToast } = useToast()
 
   if (storageError === null) return null
 
@@ -83,9 +88,14 @@ export function ErrorBanner({ className }: ErrorBannerProps) {
   const handleExport = () => {
     if (storageError === 'corrupted') {
       const backup = readCorruptedBackup()
-      const content =
-        backup.ok && backup.value !== null ? backup.value : JSON.stringify({ version: 1, tasks: [] })
-      downloadJson('aurora-tasks-backup.json', content)
+      // No quarantined bytes (or the quarantine read itself failed) means
+      // there is nothing to restore — downloading an empty envelope here
+      // would read as "your data is safe" when it is actually gone.
+      if (!backup.ok || backup.value === null) {
+        pushToast({ variant: 'danger', message: 'Выгружать нечего: повреждённые данные не сохранились.' })
+        return
+      }
+      downloadJson('aurora-tasks-backup.json', backup.value)
       return
     }
     downloadJson('aurora-tasks.json', JSON.stringify({ version: 1, tasks }))

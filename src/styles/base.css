@@ -50,6 +50,34 @@ body {
   }
 }
 
+/* ---- Sticky toolbar band (spec S1) ---------------------------------------- */
+/* Transparent until `useStickyBand` adds `.is-stuck` (the list has scrolled
+ * under it), then a translucent canvas + blur + a bottom fade so the edge
+ * doesn't read as a hard, dirty rectangle over scrolling rows. Plain CSS, not
+ * Tailwind utilities, because the mask gradient's syntax doesn't translate
+ * cleanly to an arbitrary-value class. */
+.toolbar-sticky {
+  background-color: transparent;
+  transition:
+    background-color var(--duration-base) var(--ease-standard),
+    backdrop-filter var(--duration-base) var(--ease-standard);
+}
+
+.toolbar-sticky.is-stuck {
+  background-color: var(--color-surface-1);
+  backdrop-filter: blur(var(--blur-sticky));
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - var(--space-3)), transparent 100%);
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--space-3)), transparent 100%);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .toolbar-sticky.is-stuck {
+    background-color: var(--color-surface-1-solid);
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
 /* ---- `aurora-drift` keyframes (spec 3.2, motion table 5) ------------------ */
 /* `AuroraBackground` applies this utility only outside
  * `prefers-reduced-motion` (checked in JS via `useMediaQuery`, not here),

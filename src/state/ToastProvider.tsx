@@ -121,14 +121,25 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const id = `toast-${String(nextId.current)}`
       nextId.current += 1
 
+      // Eviction is reported out of the updater on purpose: React may invoke
+      // a state updater more than once per commit (StrictMode), and the
+      // timer map is a side effect that must run exactly once.
+      let evictedId: string | undefined
       setToasts((current) => {
         const next = [...current, { ...options, id, closing: false }]
         if (next.length <= MAX_VISIBLE_TOASTS) return next
         // Oldest evicted, not animated out: eviction isn't a dismissal.
         const [evicted, ...rest] = next
-        if (evicted !== undefined) timers.current.delete(evicted.id)
+        evictedId = evicted?.id
         return rest
       })
+      if (evictedId !== undefined) {
+        const entry = timers.current.get(evictedId)
+        if (entry?.timeoutId !== null && entry?.timeoutId !== undefined) {
+          window.clearTimeout(entry.timeoutId)
+        }
+        timers.current.delete(evictedId)
+      }
 
       armTimer(id, TOAST_LIFETIME_MS)
     },

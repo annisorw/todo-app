@@ -5,7 +5,18 @@ import { makeTasks } from '../test/factories'
 import { blockedError, quotaError, storedItems, storedPayload, stubLocalStorage } from '../test/storage'
 import type { StorageStub } from '../test/storage'
 import { TaskStoreProvider } from '../state/TaskStoreProvider'
+import { ToastProvider } from '../state/ToastProvider'
 import { ErrorBanner } from './ErrorBanner'
+
+function renderBanner() {
+  return render(
+    <TaskStoreProvider>
+      <ToastProvider>
+        <ErrorBanner />
+      </ToastProvider>
+    </TaskStoreProvider>,
+  )
+}
 
 const silenceWarnings = () => vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
@@ -40,22 +51,14 @@ describe('ErrorBanner', () => {
   it('renders nothing while storage is healthy', () => {
     setup()
     stub = stubLocalStorage()
-    render(
-      <TaskStoreProvider>
-        <ErrorBanner />
-      </TaskStoreProvider>,
-    )
+    renderBanner()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('shows the S9 copy for a blocked (private-mode) storage', () => {
     setup()
     stub = stubLocalStorage({ accessError: blockedError() })
-    render(
-      <TaskStoreProvider>
-        <ErrorBanner />
-      </TaskStoreProvider>,
-    )
+    renderBanner()
 
     const banner = screen.getByRole('alert')
     expect(banner).toHaveTextContent('Не удаётся сохранить изменения')
@@ -66,11 +69,7 @@ describe('ErrorBanner', () => {
     setup()
     vi.useFakeTimers()
     stub = stubLocalStorage({ writeError: quotaError() })
-    render(
-      <TaskStoreProvider>
-        <ErrorBanner />
-      </TaskStoreProvider>,
-    )
+    renderBanner()
 
     act(() => {
       vi.advanceTimersByTime(300)
@@ -81,11 +80,7 @@ describe('ErrorBanner', () => {
   it('shows corrupted-data copy', () => {
     setup()
     stub = stubLocalStorage({ items: storedItems('{{{') })
-    render(
-      <TaskStoreProvider>
-        <ErrorBanner />
-      </TaskStoreProvider>,
-    )
+    renderBanner()
 
     expect(screen.getByRole('alert')).toHaveTextContent('Сохранённые данные повреждены')
   })
@@ -94,11 +89,7 @@ describe('ErrorBanner', () => {
     setup()
     const user = userEvent.setup()
     stub = stubLocalStorage({ accessError: blockedError() })
-    render(
-      <TaskStoreProvider>
-        <ErrorBanner />
-      </TaskStoreProvider>,
-    )
+    renderBanner()
 
     await user.click(screen.getByRole('button', { name: 'Повторить' }))
 
@@ -115,11 +106,7 @@ describe('ErrorBanner', () => {
       items: storedItems(storedPayload(makeTasks(2))),
       writeError: blockedError(),
     })
-    render(
-      <TaskStoreProvider>
-        <ErrorBanner />
-      </TaskStoreProvider>,
-    )
+    renderBanner()
 
     act(() => {
       vi.advanceTimersByTime(300)
@@ -139,15 +126,26 @@ describe('ErrorBanner', () => {
     const user = userEvent.setup()
     const truncated = '{"version":1,"tasks":[{"id":"a","title":"Первая"},'
     stub = stubLocalStorage({ items: storedItems(truncated) })
-    render(
-      <TaskStoreProvider>
-        <ErrorBanner />
-      </TaskStoreProvider>,
-    )
+    renderBanner()
 
     await user.click(screen.getByRole('button', { name: 'Выгрузить в файл' }))
 
     const blob = createObjectURL.mock.calls[0]?.[0] as Blob
     expect(await blob.text()).toBe(truncated)
+  })
+
+  it('refuses to export an empty envelope when the quarantine copy never landed', async () => {
+    setup()
+    const user = userEvent.setup()
+    const truncated = '{"version":1,"tasks":[{"id":"a","title":"Первая"},'
+    // The quarantine write itself fails (e.g. quota exhausted), so there is
+    // no backup to hand back — the export must not claim otherwise.
+    stub = stubLocalStorage({ items: storedItems(truncated), writeError: quotaError() })
+    renderBanner()
+
+    await user.click(screen.getByRole('button', { name: 'Выгрузить в файл' }))
+
+    expect(createObjectURL).not.toHaveBeenCalled()
+    expect(screen.getByText(/Выгружать нечего/)).toBeInTheDocument()
   })
 })
