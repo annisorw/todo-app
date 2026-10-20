@@ -38,12 +38,24 @@ export interface TaskListProps {
  * only this transient display list reorders, and only for ≤600ms.
  */
 export function TaskList({ view, query, filter, panelId, activeTabId }: TaskListProps) {
-  const { toggleTask, editTask, removeTask, restoreRemoved, clearCompleted } = useTaskStore()
+  const { toggleTask, editTask, removeTask, restoreRemoved, clearCompleted, lastRemoved } = useTaskStore()
   const { pushToast } = useToast()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [settling, setSettling] = useState<Record<string, Task>>({})
   const settleTimers = useRef<Record<string, number>>({})
   const [todayKey] = useState(() => toDateKey(new Date()))
+
+  // The store keeps one `lastRemoved` slot (architecture section 4), so an
+  // undo toast must check it's still the removal it names before acting —
+  // otherwise an older toast, left on screen by a second delete before the
+  // first one expires, would restore whichever task is *now* in that slot
+  // instead of the one its own message quotes. Read via a ref so each
+  // toast's `onAction` (bound once, at push time) sees the slot's state at
+  // click time, not at push time.
+  const lastRemovedRef = useRef(lastRemoved)
+  useEffect(() => {
+    lastRemovedRef.current = lastRemoved
+  }, [lastRemoved])
 
   useEffect(
     () => () => {
@@ -63,7 +75,12 @@ export function TaskList({ view, query, filter, panelId, activeTabId }: TaskList
     }
 
     if (willBeDone) {
-      setSettling((previous) => ({ ...previous, [task.id]: task }))
+      // `task` is the pre-dispatch object — `completedAt` still null. The
+      // store's own update won't reach this render until the next one, so
+      // the settling snapshot has to apply the same transition itself,
+      // or the row would render unchecked for the whole 600ms delay.
+      const settledTask: Task = { ...task, completedAt: new Date().toISOString() }
+      setSettling((previous) => ({ ...previous, [task.id]: settledTask }))
       settleTimers.current[task.id] = window.setTimeout(() => {
         delete settleTimers.current[task.id]
         setSettling((previous) => {
@@ -102,7 +119,12 @@ export function TaskList({ view, query, filter, panelId, activeTabId }: TaskList
       variant: 'danger',
       message: `Задача удалена: «${task.title}»`,
       actionLabel: 'Вернуть',
-      onAction: restoreRemoved,
+      // Guard against a second delete landing while this toast is still up:
+      // only restore if the store's single `lastRemoved` slot still holds
+      // *this* task, not whichever one got removed after it.
+      onAction: () => {
+        if (lastRemovedRef.current?.task.id === task.id) restoreRemoved()
+      },
     })
   }
 

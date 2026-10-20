@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LiveRegion } from '../../components/LiveRegion'
@@ -76,6 +76,20 @@ describe('TaskList', () => {
       // specifically rather than the whole document.
       const completedSection = document.querySelector('section[aria-label="Выполнено"]')
       expect(completedSection?.textContent).toContain('Купить молоко')
+    })
+
+    it('shows the row as checked immediately, not just after the 600ms settle delay elapses', () => {
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const checkbox: HTMLInputElement = screen.getByRole('checkbox')
+      fireEvent.click(checkbox)
+
+      expect(checkbox.checked).toBe(true)
+
+      act(() => {
+        vi.advanceTimersByTime(300)
+      })
+      expect(checkbox.checked).toBe(true)
     })
 
     it('unchecking before the settle delay elapses keeps it active with no further delay', () => {
@@ -242,6 +256,58 @@ describe('TaskList', () => {
     })
   })
 
+  describe('mobile editor sheet (acceptance criteria 29, 31, 32)', () => {
+    beforeEach(() => {
+      stubMatchMedia(false)
+    })
+
+    it('tapping the priority glyph inside the chip opens the picker without the row re-toggling it shut', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко', priority: 'high' })])
+
+      await user.dblClick(screen.getByText('Купить молоко'))
+      const chip = screen.getByRole('button', { name: /Высокий/ })
+      const glyph = chip.querySelector('[aria-hidden="true"]')
+
+      await user.click(glyph!)
+
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+    })
+
+    it('clicking the due-date input does not close the panel before it can be used', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      await user.dblClick(screen.getByText('Купить молоко'))
+      await user.click(screen.getByRole('button', { name: 'Срок' }))
+
+      const dateInput = document.querySelector('input[type="date"]')
+      expect(dateInput).toBeInTheDocument()
+
+      await user.click(dateInput!)
+
+      expect(document.querySelector('input[type="date"]')).toBeInTheDocument()
+    })
+
+    it('Tab forward from Save wraps to the textarea, and Shift+Tab back from the textarea wraps to Save', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      await user.dblClick(screen.getByText('Купить молоко'))
+
+      const textarea = screen.getByRole('textbox', { name: 'Текст задачи' })
+      const save = screen.getByRole('button', { name: 'Сохранить' })
+
+      save.focus()
+      await user.tab()
+      expect(textarea).toHaveFocus()
+
+      textarea.focus()
+      await user.tab({ shift: true })
+      expect(save).toHaveFocus()
+    })
+  })
+
   describe('keyboard traversal of the list', () => {
     beforeEach(() => {
       stubMatchMedia(true)
@@ -266,6 +332,23 @@ describe('TaskList', () => {
 
       await user.keyboard('{ArrowDown}')
       expect(checkboxes[2]).toHaveFocus()
+    })
+
+    it('keeps the desktop priority/due-date chips out of inactive rows\' tab order', () => {
+      renderTaskList([
+        makeTask({ id: 't1', title: 'Первая', priority: 'high', dueDate: '2026-10-25' }),
+        makeTask({ id: 't2', title: 'Вторая', priority: 'medium', dueDate: '2026-10-26' }),
+      ])
+
+      const rows = screen.getAllByRole('listitem')
+      const priorityChip = (row: HTMLElement) => within(row).getByRole('button', { name: /Высокий|Средний/ })
+      const dueDateChip = (row: HTMLElement) => row.querySelector('button[aria-haspopup="dialog"]')
+
+      // Row 0 is the roving-focus group's active stop; row 1 is not.
+      expect(priorityChip(rows[0]!)).toHaveAttribute('tabindex', '0')
+      expect(dueDateChip(rows[0]!)).toHaveAttribute('tabindex', '0')
+      expect(priorityChip(rows[1]!)).toHaveAttribute('tabindex', '-1')
+      expect(dueDateChip(rows[1]!)).toHaveAttribute('tabindex', '-1')
     })
   })
 
@@ -394,6 +477,42 @@ describe('TaskList', () => {
       await user.click(screen.getByRole('button', { name: 'Вернуть' }))
 
       expect(screen.getByText('Купить молоко')).toBeInTheDocument()
+    })
+
+    it('a stale undo toast does not restore the wrong task when a second delete happened first', async () => {
+      const user = userEvent.setup()
+      renderTaskList([
+        makeTask({ id: 't1', title: 'Первая' }),
+        makeTask({ id: 't2', title: 'Вторая' }),
+      ])
+
+      // Scope each delete to its own row by text, not by index: the
+      // deleted row's exit animation (`transition` 320ms) keeps it mounted
+      // in jsdom for a tick, so a second `getAllByRole(...)[0]` right after
+      // the first delete can still hit the exiting row instead of the next
+      // live one.
+      async function deleteRowNamed(title: string) {
+        const row = screen.getByText(title).closest('li')
+        if (row === null) throw new Error(`row for "${title}" not found`)
+        await user.click(within(row).getByRole('button', { name: /Действия с задачей/ }))
+        await user.click(screen.getByRole('menuitem', { name: 'Удалить' }))
+      }
+
+      await deleteRowNamed('Первая')
+      await deleteRowNamed('Вторая')
+
+      const alerts = screen.getAllByRole('alert')
+      expect(alerts[0]).toHaveTextContent('Задача удалена: «Первая»')
+      expect(alerts[1]).toHaveTextContent('Задача удалена: «Вторая»')
+
+      // The store's single undo slot now holds "Вторая" — the older toast
+      // (naming "Первая") must no-op rather than restore the wrong task.
+      await user.click(within(alerts[0]!).getByRole('button', { name: 'Вернуть' }))
+      expect(screen.queryByText('Первая')).not.toBeInTheDocument()
+      expect(screen.queryByText('Вторая')).not.toBeInTheDocument()
+
+      await user.click(within(alerts[1]!).getByRole('button', { name: 'Вернуть' }))
+      expect(screen.getByText('Вторая')).toBeInTheDocument()
     })
   })
 

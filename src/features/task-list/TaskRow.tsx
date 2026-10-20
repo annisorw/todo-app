@@ -417,12 +417,20 @@ function RowBody({
 
         <div className="mt-(--space-1) flex flex-wrap items-center gap-(--space-2)">
           {isDesktop ? (
-            <PrioritySelect value={task.priority} onChange={(priority) => onQuickChange({ priority })} />
+            <PrioritySelect
+              value={task.priority}
+              onChange={(priority) => onQuickChange({ priority })}
+              tabIndex={tabIndex}
+            />
           ) : (
             <PriorityChip priority={task.priority} variant="static" />
           )}
           {isDesktop ? (
-            <DueDatePicker value={task.dueDate} onChange={(dueDate) => onQuickChange({ dueDate })} />
+            <DueDatePicker
+              value={task.dueDate}
+              onChange={(dueDate) => onQuickChange({ dueDate })}
+              tabIndex={tabIndex}
+            />
           ) : (
             <DueDateChip status={dueInfo.status} label={dueInfo.label} variant="static" />
           )}

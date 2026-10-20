@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { useEffect, useRef } from 'react'
-import type { MouseEvent, ReactNode } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent, ReactNode } from 'react'
 import { Button } from '../../components/Button'
 import { DueDatePicker } from '../../components/DueDatePicker'
 import { PrioritySelect } from '../../components/PrioritySelect'
@@ -22,27 +22,32 @@ export interface TaskEditorSheetProps {
  * 31: every target in this sheet is ≥44×44), not just the 24px chip inside
  * it — `PriorityChip`/`DueDateChip` stay fixed at 24px by design (spec
  * 3.12: "высоту нельзя уменьшать", and nothing here raises it either).
- * Tapping anywhere in the row forwards a real click to the chip's own
- * button so `PrioritySelect`/`DueDatePicker` open exactly as if their chip
- * had been tapped directly — no prop, ref or behaviour added to either
- * picker.
+ * Tapping the label or the row's empty space forwards a real click to the
+ * chip's own button so `PrioritySelect`/`DueDatePicker` open exactly as if
+ * their chip had been tapped directly — no prop, ref or behaviour added to
+ * either picker. A click that lands inside `children` (the chip itself, an
+ * icon glyph nested in its button, or the open popover's own controls) is
+ * left alone: those elements already handle their own clicks, and
+ * re-forwarding to the trigger button there would re-toggle it shut the
+ * instant it opened.
  */
 function EditorFieldRow({ label, children }: { label: string; children: ReactNode }) {
-  const rowRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   function handleRowClick(event: MouseEvent<HTMLDivElement>) {
-    const button = rowRef.current?.querySelector('button')
-    if (button && event.target !== button) button.click()
+    if (contentRef.current?.contains(event.target as Node)) return
+    contentRef.current?.querySelector('button')?.click()
   }
 
   return (
     <div
-      ref={rowRef}
       onClick={handleRowClick}
       className="flex h-12 items-center justify-between gap-(--space-3) border-b border-surface-border last:border-b-0"
     >
       <span className="text-body text-secondary">{label}</span>
-      {children}
+      <div ref={contentRef} className="contents">
+        {children}
+      </div>
     </div>
   )
 }
@@ -63,6 +68,7 @@ function EditorFieldRow({ label, children }: { label: string; children: ReactNod
 export function TaskEditorSheet({ task, onSave, onCancel }: TaskEditorSheetProps) {
   const form = useTaskEditorForm({ task, onSave, onCancel })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
 
   useDismissable({ onDismiss: form.handleCancel })
@@ -78,6 +84,32 @@ export function TaskEditorSheet({ task, onSave, onCancel }: TaskEditorSheetProps
     node.style.height = `${String(node.scrollHeight)}px`
   }, [form.title])
 
+  // Trap Tab inside the sheet: `RowBody` and the rest of the page stay
+  // mounted behind this `aria-modal` dialog, so without this the native
+  // tab order would walk right through to them. The focusable set changes
+  // while a popover is open, so this re-queries live on every Tab instead
+  // of caching first/last once.
+  function handlePanelKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Tab') return
+
+    const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    )
+    if (!focusable || focusable.length === 0) return
+
+    const first = focusable.item(0)
+    const last = focusable.item(focusable.length - 1)
+    if (first === null || last === null) return
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-(--z-modal) flex flex-col justify-end">
       <motion.div
@@ -90,6 +122,8 @@ export function TaskEditorSheet({ task, onSave, onCancel }: TaskEditorSheetProps
       />
 
       <motion.div
+        ref={panelRef}
+        onKeyDown={handlePanelKeyDown}
         role="dialog"
         aria-modal="true"
         aria-label="Изменить задачу"

@@ -13,6 +13,8 @@ export interface DueDatePickerProps {
   value: string | null
   onChange: (value: string | null) => void
   className?: string
+  /** Forwarded to the trigger chip — the desktop row quick-path uses this for roving tabindex. */
+  tabIndex?: number
 }
 
 interface Preset {
@@ -113,7 +115,7 @@ function DatePanel({ id, value, today, anchorRef, onCommit, onClose, prefersRedu
  * Same `value`/`onChange` contract as `PrioritySelect`: `Composer`,
  * `TaskEditor` and the desktop row quick-path share one implementation.
  */
-export function DueDatePicker({ value, onChange, className }: DueDatePickerProps) {
+export function DueDatePicker({ value, onChange, className, tabIndex }: DueDatePickerProps) {
   const [open, setOpen] = useState(false)
   const [today] = useState(() => new Date())
   const anchorRef = useRef<HTMLButtonElement>(null)
@@ -139,6 +141,7 @@ export function DueDatePicker({ value, onChange, className }: DueDatePickerProps
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((isOpen) => !isOpen)}
         className={className}
+        tabIndex={tabIndex}
       />
       {open && (
         <DatePanel
