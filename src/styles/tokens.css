@@ -1,0 +1,304 @@
+/* Design tokens — the single place where values from docs/design-spec.md live.
+ *
+ * Sections below map 1:1 onto design-spec sections 2.1-2.9. Names and values are
+ * transcribed verbatim, so a reviewer can diff this file against the spec
+ * tables. A hardcoded colour, spacing, radius, shadow or duration anywhere else
+ * in the codebase is a review blocker (design-spec, acceptance criterion 1).
+ *
+ * Dark is the default theme and lives in the `@theme` block, which Tailwind
+ * emits on `:root`. Declaring it there (instead of a hand-written `:root`) keeps
+ * one source of truth: the same declaration feeds both plain CSS
+ * (`var(--color-*)`) and Tailwind utilities (`bg-surface-1`, `text-secondary`,
+ * `rounded-lg`). `static` makes Tailwind emit every token even while the app is
+ * still being built out and most utilities are unused.
+ *
+ * Light overrides live in an unlayered `[data-theme='light']` block, so they win
+ * over Tailwind's `theme` layer and the switch is a single attribute on <html>.
+ * Tokens identical in both themes are declared once, in dark only.
+ */
+
+@theme static {
+  /* ---- 2.1 Colour — dark (default theme) ---------------------------------- */
+  --color-bg-canvas: #0B0B14;
+
+  --color-aurora-1: rgba(124,92,248,.42);
+  --color-aurora-2: rgba(6,182,212,.26);
+  --color-aurora-3: rgba(236,72,153,.20);
+
+  --color-surface-1: rgba(23,23,38,.72);
+  --color-surface-1-solid: #17172A;
+  --color-surface-2: rgba(30,30,51,.92);
+  --color-surface-2-solid: #1E1E33;
+  --color-surface-hover: rgba(255,255,255,.045);
+
+  /* Decorative edges — 1.2:1 and 1.5:1, never a carrier of meaning. */
+  --color-surface-border: rgba(255,255,255,.08);
+  --color-surface-border-strong: rgba(255,255,255,.17);
+  /* Control outline (checkbox): 3.24:1 against --color-surface-1-solid. */
+  --color-control-border: #6A6A85;
+
+  --color-text-primary: #F4F4FB;
+  --color-text-secondary: #A9A9C4;
+  --color-text-tertiary: #8A8AA8;
+
+  --color-accent: #6D45F0;
+  --color-accent-hover: #5C34DE;
+  --color-accent-active: #4E2BC4;
+  --color-accent-contrast: #FFFFFF;
+  /* Accent as text/icon on the canvas — the solid fill is too dark for text. */
+  --color-accent-text: #A78BFA;
+  --color-focus-ring: #A78BFA;
+
+  --color-priority-high: #FB7185;
+  --color-priority-med: #FBBF24;
+  --color-priority-low: #8A8AA8;
+  --color-overdue: #FB7185;
+  --color-success: #34D399;
+  --color-danger: #FB7185;
+
+  --skeleton-base: rgba(255,255,255,.05);
+  --skeleton-shine: rgba(255,255,255,.11);
+
+  /* ---- 2.3 Gradient ------------------------------------------------------- */
+  /* Text on --gradient-accent is forbidden: the cyan end gives 2.45:1 on white.
+   * Allowed: AuroraBackground, ProgressRing fill, checked Checkbox, the `+`
+   * circle in Composer and Fab, drop-indicator backing. Labelled buttons always
+   * use the solid --color-accent. */
+  --gradient-accent: linear-gradient(135deg,#7C5CF8 0%,#8B5CF6 42%,#06B6D4 100%);
+  --gradient-accent-soft: linear-gradient(135deg,rgba(124,92,248,.16),rgba(6,182,212,.14));
+
+  /* ---- 2.4 Spacing — 4 px step -------------------------------------------- */
+  /* Tailwind's own --spacing stays at 4 px, so `p-4` and var(--space-4) agree. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* ---- 2.5 Typography ----------------------------------------------------- */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Counters and <kbd> only. */
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+  --text-display: 40px;
+  --text-display--line-height: 44px;
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.022em;
+
+  --text-h1: 28px;
+  --text-h1--line-height: 34px;
+  --text-h1--font-weight: 650;
+  --text-h1--letter-spacing: -0.015em;
+
+  --text-h2: 20px;
+  --text-h2--line-height: 28px;
+  --text-h2--font-weight: 600;
+  --text-h2--letter-spacing: -0.01em;
+
+  --text-body-lg: 17px;
+  --text-body-lg--line-height: 26px;
+  --text-body-lg--font-weight: 400;
+  --text-body-lg--letter-spacing: 0em;
+
+  /* Task text. 15 px is the floor for body copy — never smaller. */
+  --text-body: 15px;
+  --text-body--line-height: 22px;
+  --text-body--font-weight: 400;
+  --text-body--letter-spacing: 0em;
+
+  --text-body-strong: 15px;
+  --text-body-strong--line-height: 22px;
+  --text-body-strong--font-weight: 550;
+  --text-body-strong--letter-spacing: 0em;
+
+  --text-label: 13px;
+  --text-label--line-height: 18px;
+  --text-label--font-weight: 550;
+  --text-label--letter-spacing: 0.01em;
+
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--font-weight: 500;
+  --text-caption--letter-spacing: 0.02em;
+
+  /* The spec also calls for uppercase here; Tailwind has no font-size modifier
+   * for text-transform, so pair `text-micro` with the `uppercase` utility. */
+  --text-micro: 11px;
+  --text-micro--line-height: 14px;
+  --text-micro--font-weight: 600;
+  --text-micro--letter-spacing: 0.08em;
+
+  /* ---- 2.6 Radii ---------------------------------------------------------- */
+  /* Row and card: lg. Input, icon button, segment: md/sm. Composer and panels:
+   * xl. Avatars, chips, toast, FAB: full. */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+  --radius-full: 999px;
+
+  /* ---- 2.7 Shadow & blur -------------------------------------------------- */
+  --shadow-xs: 0 1px 2px rgba(3,3,10,.30);
+  --shadow-sm: 0 2px 8px rgba(3,3,10,.34);
+  --shadow-md: 0 8px 24px -4px rgba(3,3,10,.42);
+  --shadow-lg: 0 24px 64px -12px rgba(3,3,10,.56);
+  --shadow-glow-accent: 0 0 0 1px rgba(124,92,248,.45), 0 8px 32px -8px rgba(124,92,248,.45);
+  --shadow-drag: 0 18px 44px -8px rgba(3,3,10,.60);
+
+  --blur-surface: 20px;
+  --blur-aurora: 90px;
+
+  /* ---- 2.8 Motion --------------------------------------------------------- */
+  /* Doherty: any response to input stays within --duration-fast. Longer is only
+   * allowed for objects moving inside the list. */
+  --duration-instant: 80ms;
+  --duration-fast: 140ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --duration-slower: 480ms;
+
+  --ease-standard: cubic-bezier(.2,0,0,1);
+  --ease-out-soft: cubic-bezier(.16,1,.3,1);
+  --ease-in-fast: cubic-bezier(.4,0,1,1);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+
+  /* ---- 2.9 Layout & z-index ----------------------------------------------- */
+  --layout-content-max: 760px;
+  --layout-header-h: 64px;
+  --layout-row-h: 56px;
+  /* Gutter is --space-6 on desktop, --space-4 on mobile (spec 2.9). Named here
+   * so screens never inline the breakpoint themselves. */
+  --layout-gutter: var(--space-6);
+
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-dropdown: 100;
+  --z-drag: 200;
+  --z-modal: 300;
+  --z-toast: 400;
+}
+
+/* ---- 2.2 Colour — light --------------------------------------------------- */
+/* Unlayered on purpose: it must outrank Tailwind's `theme` layer so switching
+ * `data-theme` on <html> re-themes every utility without a reload.
+ * --color-accent / -hover / -active / -contrast are the same as in dark and are
+ * therefore not repeated. */
+[data-theme='light'] {
+  --color-bg-canvas: #F6F5FB;
+
+  --color-aurora-1: rgba(124,92,248,.26);
+  --color-aurora-2: rgba(6,182,212,.20);
+  --color-aurora-3: rgba(236,72,153,.14);
+
+  --color-surface-1: rgba(255,255,255,.80);
+  --color-surface-1-solid: #FFFFFF;
+  --color-surface-2: rgba(255,255,255,.96);
+  --color-surface-2-solid: #FFFFFF;
+  --color-surface-hover: rgba(17,17,34,.035);
+
+  --color-surface-border: rgba(17,17,34,.09);
+  --color-surface-border-strong: rgba(17,17,34,.16);
+  /* 3.21:1 against --color-surface-1-solid. */
+  --color-control-border: #8E8EA3;
+
+  --color-text-primary: #15152A;
+  --color-text-secondary: #55556E;
+  --color-text-tertiary: #6E6E8A;
+
+  --color-accent-text: #5C34DE;
+  --color-focus-ring: #5C34DE;
+
+  --color-priority-high: #D6214B;
+  --color-priority-med: #A1620A;
+  --color-priority-low: #6E6E8A;
+  --color-overdue: #D6214B;
+  --color-success: #0F7A55;
+  --color-danger: #C01B41;
+
+  /* ---- 2.7 Shadow — light ------------------------------------------------- */
+  --shadow-xs: 0 1px 2px rgba(17,17,34,.05);
+  --shadow-sm: 0 2px 8px rgba(17,17,34,.07);
+  --shadow-md: 0 10px 28px -6px rgba(17,17,34,.11);
+  --shadow-lg: 0 26px 64px -14px rgba(17,17,34,.16);
+  --shadow-glow-accent: 0 0 0 1px rgba(109,69,240,.35), 0 8px 28px -10px rgba(109,69,240,.35);
+  --shadow-drag: 0 18px 44px -10px rgba(17,17,34,.22);
+}
+
+/* ---- Mobile overrides (design-spec 2.5 and 2.9) --------------------------- */
+/* The single breakpoint. Written as `width < 40rem` so it lines up exactly with
+ * Tailwind's `sm` / `max-sm`: at precisely 640 px the tokens and the utilities
+ * must not disagree. */
+@media (width < 40rem) {
+  :root {
+    --text-display: 30px;
+    --text-display--line-height: 36px;
+
+    --text-body-lg: 16px;
+    --text-body-lg--line-height: 24px;
+
+    --layout-header-h: 56px;
+    --layout-row-h: 64px;
+    --layout-gutter: var(--space-4);
+  }
+}
+
+/* ---- Tailwind bridge ------------------------------------------------------ */
+/* Most tokens above already produce theme-aware utilities, because Tailwind
+ * compiles them to a `var()` reference: `bg-surface-1`, `border-surface-border`,
+ * `rounded-lg`, `text-body`, `ease-out-soft`, `max-w-(--layout-content-max)`.
+ * Two groups need help, and both are about staying theme-aware rather than about
+ * adding new values.
+ *
+ * 1. Text colours. Tailwind's text-colour utility is also `text-*`, so the
+ *    spec's `--color-text-secondary` would have to be written
+ *    `text-text-secondary`. These three utilities give markup the names the
+ *    architecture doc promises (`text-secondary`).
+ *
+ * 2. Shadows. Tailwind inlines shadow values into the utility instead of
+ *    referencing the variable, so a plain `shadow-md` would keep the dark
+ *    geometry and colour under `[data-theme='light']` — wrong, and invisible
+ *    until someone screenshots the light theme. Overriding the utilities makes
+ *    `shadow-md` read the token, so there is no silently-wrong spelling.
+ *
+ * Tokens with no Tailwind namespace (`--duration-*`, `--z-*`, `--space-*`,
+ * `--layout-*`, `--blur-*`) are used via `var()` in component CSS or via
+ * Tailwind's variable shorthand: `duration-(--duration-fast)`, `z-(--z-modal)`.
+ * Never inline the number.
+ */
+
+@utility text-primary {
+  color: var(--color-text-primary);
+}
+@utility text-secondary {
+  color: var(--color-text-secondary);
+}
+@utility text-tertiary {
+  color: var(--color-text-tertiary);
+}
+
+@utility shadow-xs {
+  box-shadow: var(--shadow-xs);
+}
+@utility shadow-sm {
+  box-shadow: var(--shadow-sm);
+}
+@utility shadow-md {
+  box-shadow: var(--shadow-md);
+}
+@utility shadow-lg {
+  box-shadow: var(--shadow-lg);
+}
+@utility shadow-glow-accent {
+  box-shadow: var(--shadow-glow-accent);
+}
+@utility shadow-drag {
+  box-shadow: var(--shadow-drag);
+}
