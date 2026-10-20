@@ -80,3 +80,45 @@ describe('AppHeader', () => {
     expect(screen.getByText('Шпаргалка появится позже.')).toBeInTheDocument()
   })
 })
+
+/**
+ * Design spec v1.3, section 3.3: the wordmark is a decorative 22x22 dot
+ * (accent gradient + glow, `aria-hidden`) plus a `text-label` caption with its
+ * own weight/tracking override. The dot must not add an accessible node of its
+ * own — the header's accessible name comes entirely from the caption text.
+ */
+describe('AppHeader wordmark', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    stubMatchMedia(false)
+  })
+
+  it('reads as "AURORA · TASKS" — the dot carries no accessible content', () => {
+    renderHeader()
+
+    const label = screen.getByText('AURORA · TASKS')
+    const wordmark = label.parentElement as HTMLElement
+    const dot = wordmark.firstElementChild as HTMLElement
+
+    expect(dot).toHaveAttribute('aria-hidden', 'true')
+    expect(dot).toBeEmptyDOMElement()
+    expect(wordmark).toHaveTextContent('AURORA · TASKS')
+  })
+
+  it('gives the dot the spec geometry: 22x22, full radius, accent gradient fill and glow', () => {
+    renderHeader()
+
+    const label = screen.getByText('AURORA · TASKS')
+    const dot = (label.parentElement as HTMLElement).firstElementChild as HTMLElement
+
+    expect(dot).toHaveClass('size-[22px]', 'rounded-(--radius-full)', 'bg-gradient-accent', 'shadow-glow-accent')
+  })
+
+  it('sets the label to text-label with the 3.3 weight/tracking/colour overrides', () => {
+    renderHeader()
+
+    const label = screen.getByText('AURORA · TASKS')
+
+    expect(label).toHaveClass('text-label', 'font-[650]', 'tracking-[0.02em]', 'text-primary')
+  })
+})
