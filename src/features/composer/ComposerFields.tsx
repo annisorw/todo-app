@@ -98,12 +98,12 @@ export function ComposerFields({ form, autoFocus, textareaRef }: ComposerFieldsP
         )}
 
         {form.showCounter && (
-          <span
-            className={cn(
-              'font-mono text-caption',
-              form.title.length > MAX_TITLE_LENGTH ? 'text-danger' : 'text-tertiary',
-            )}
-          >
+          // design-spec v1.4 wants `.text-mono-num` here (font-mono +
+          // weight 400 + tabular-nums, FELA-54), not `font-mono` by hand —
+          // TechLead's note on FELA-14 says not to invent a stand-in while
+          // FELA-54 is still out, so this stays plain `text-caption` until
+          // that class lands.
+          <span className={cn('text-caption', form.title.length > MAX_TITLE_LENGTH ? 'text-danger' : 'text-tertiary')}>
             {form.title.length}/{MAX_TITLE_LENGTH}
           </span>
         )}
