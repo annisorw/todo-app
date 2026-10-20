@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import type { KeyboardEvent } from 'react'
+import { useDismissable } from '../lib/useDismissable'
 import { Button } from './Button'
 
 export interface ConfirmDialogProps {
@@ -28,37 +29,45 @@ function pluralizeTasks(count: number): string {
 
 /**
  * design-spec 3.16. 480px (`--size-modal-md`), focus trap, `Esc` closes,
- * focus returns to whatever opened it. The `Escape` handler calls
- * `stopPropagation` so a future global shortcut handler (FELA-20) doesn't
- * also react to the same keypress — this dialog owns Escape while it's open,
- * it just doesn't listen on `document` to get there.
+ * focus returns to whatever opened it.
+ *
+ * `open` is a prop rather than a mount decision for the caller, but the panel
+ * underneath is mounted only while open: `useDismissable` registers a layer
+ * for exactly as long as it is mounted, so a closed dialog must not be on the
+ * stack at all. Splitting the component is what makes that unrepresentable.
  */
 export function ConfirmDialog({ open, completedCount, onConfirm, onCancel }: ConfirmDialogProps) {
+  if (!open) return null
+
+  return <ConfirmDialogPanel completedCount={completedCount} onConfirm={onConfirm} onCancel={onCancel} />
+}
+
+type ConfirmDialogPanelProps = Omit<ConfirmDialogProps, 'open'>
+
+function ConfirmDialogPanel({ completedCount, onConfirm, onCancel }: ConfirmDialogPanelProps) {
   const titleId = useId()
   const cancelRef = useRef<HTMLButtonElement>(null)
   const confirmRef = useRef<HTMLButtonElement>(null)
   const triggerRef = useRef<Element | null>(null)
 
-  useEffect(() => {
-    if (!open) return
+  // Esc приходит от единственного владельца (`lib/dismissStack.ts`), поэтому
+  // попап, открытый внутри диалога, забирает первое нажатие, а диалог под ним
+  // закрывается только следующим. Без `returnFocusTo`: фокус возвращает эффект
+  // ниже при размонтировании, а ссылка хуку вернула бы его второй раз.
+  useDismissable({ onDismiss: onCancel })
 
+  useEffect(() => {
     triggerRef.current = document.activeElement
     cancelRef.current?.focus()
 
     return () => {
       if (triggerRef.current instanceof HTMLElement) triggerRef.current.focus()
     }
-  }, [open])
+  }, [])
 
-  if (!open) return null
-
+  // Только ловушка Tab. Esc сюда не доходит: стек гасит нажатие на `document`
+  // в фазе перехвата, то есть раньше, чем React доберётся до этого дерева.
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') {
-      event.stopPropagation()
-      onCancel()
-      return
-    }
-
     if (event.key !== 'Tab') return
 
     const first = cancelRef.current
