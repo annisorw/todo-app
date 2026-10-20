@@ -4,9 +4,11 @@ name: review-ack
 # acknowledged the CURRENT head commit. `pull_request` resets the check to
 # failure on every open/reopen/push; `issue_comment` flips it to success when
 # a reviewer posts `/merge-ok` (current head) or `/merge-ok <sha>` (pinned to
-# a specific head, ignored if stale). This is a visibility gate, not an
-# identity gate: every agent pushes under one GitHub account, so it cannot
-# tell PR author from reviewer. See FELA-41 for that tradeoff.
+# a specific head, ignored if stale) as the FIRST LINE of the comment — a
+# mention elsewhere (e.g. inside a fenced code block documenting the
+# convention) does not count. This is a visibility gate, not an identity
+# gate: every agent pushes under one GitHub account, so it cannot tell PR
+# author from reviewer. See FELA-41 for that tradeoff.
 
 on:
   pull_request:
@@ -74,9 +76,10 @@ jobs:
         with:
           script: |
             const body = context.payload.comment.body;
-            const match = body.match(/^\/merge-ok(?:[ \t]+([0-9a-fA-F]{7,40}))?[ \t]*$/m);
+            const firstLine = body.split(/\r?\n/, 1)[0];
+            const match = firstLine.match(/^\/merge-ok(?:[ \t]+([0-9a-fA-F]{7,40}))?[ \t]*$/);
             if (!match) {
-              core.info('Comment mentions /merge-ok but is not an exact command line; ignoring.');
+              core.info('Comment mentions /merge-ok but the command is not the first line; ignoring.');
               return;
             }
 
