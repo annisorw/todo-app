@@ -1,0 +1,5 @@
+# Paths (glob allowed) that may add or change binary files in a diff.
+# Add a new line in the *same PR* that introduces the binary, so the
+# allowlist change is visible on review. See .github/workflows/ci.yml,
+# job "ci", step "Check for unapproved binary files".
+src/assets/fonts/*.woff2
