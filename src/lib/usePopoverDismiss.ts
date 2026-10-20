@@ -29,7 +29,6 @@ export function usePopoverDismiss({ onClose, anchorRef, panelRef }: UsePopoverDi
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
-      event.stopPropagation()
       onClose()
       anchorRef.current?.focus()
     }
