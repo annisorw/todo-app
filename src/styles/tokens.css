@@ -155,6 +155,10 @@
 
   --blur-surface: 20px;
   --blur-aurora: 90px;
+  /* Sticky toolbar band only (design-spec S1): the spec fixes this at 16px,
+   * a different value from --blur-surface, so it gets its own token instead
+   * of a literal in the component. */
+  --blur-sticky: 16px;
 
   /* ---- 2.8 Motion --------------------------------------------------------- */
   /* Doherty: any response to input stays within --duration-fast. Longer is only
