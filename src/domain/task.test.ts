@@ -70,6 +70,21 @@ describe('createTask', () => {
     expect(createTask({ title: 'a'.repeat(MAX_TITLE_LENGTH + 1) }, NOW)).toBeNull()
   })
 
+  it('отклоняет черновик с несуществующей датой и с мусором вместо даты', () => {
+    // Негодный срок — негодный черновик, а не задача без срока: разборщик
+    // хранилища такой `dueDate` не принимает и выбросил бы задачу целиком.
+    expect(createTask({ title: 'Купить молоко', dueDate: '2026-02-30' }, NOW)).toBeNull()
+    expect(createTask({ title: 'Купить молоко', dueDate: 'not-a-date' }, NOW)).toBeNull()
+    expect(createTask({ title: 'Купить молоко', dueDate: '20.10.2026' }, NOW)).toBeNull()
+  })
+
+  it('принимает черновик без срока и с корректной датой', () => {
+    expect(createTask({ title: 'Без срока', dueDate: null }, NOW)?.dueDate).toBeNull()
+    expect(createTask({ title: 'Со сроком', dueDate: '2028-02-29' }, NOW)?.dueDate).toBe(
+      '2028-02-29',
+    )
+  })
+
   it('сохраняет разметку в тексте посимвольно и ничего не вырезает', () => {
     // Экранирует React на выводе. Санитизация на входе сломала бы легальные
     // `<`, `>` и `&` в названиях задач (docs/CODE-RULES.md, раздел 1).

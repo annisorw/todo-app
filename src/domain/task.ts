@@ -1,7 +1,21 @@
+import { isValidDueDate } from './dueDate'
 import { MAX_TITLE_LENGTH } from './limits'
 
-/** Приоритет задачи. `none` — приоритет не выбран, это не «низкий». */
-export type Priority = 'none' | 'low' | 'medium' | 'high'
+/**
+ * Приоритеты по возрастанию важности. `none` — приоритет не выбран, это не «низкий».
+ *
+ * Список значений объявлен один раз и здесь: разборщику хранилища нужна
+ * проверка во время выполнения, а тип в рантайме не существует. Второй копии
+ * этих четырёх строк в коде быть не должно.
+ */
+export const PRIORITIES = ['none', 'low', 'medium', 'high'] as const
+
+export type Priority = (typeof PRIORITIES)[number]
+
+/** Проверка для недоверенного ввода: прочитанного из `localStorage`, прежде всего. */
+export function isPriority(value: unknown): value is Priority {
+  return typeof value === 'string' && PRIORITIES.some((priority) => priority === value)
+}
 
 export interface Task {
   /** crypto.randomUUID() */
@@ -62,12 +76,19 @@ export function normalizeTitle(title: string): string | null {
  * Время передаётся аргументом, а не берётся из системных часов: так тест задаёт
  * `createdAt` явно, а домен остаётся без скрытого ввода.
  *
+ * Негодный `dueDate` отклоняет весь черновик, а не обнуляется в `null`: человек
+ * выбрал срок, и тихо его потерять хуже, чем отказать. Это же держит границу
+ * записи согласованной с разборщиком хранилища, который битый срок не принимает
+ * и выбрасывает задачу целиком — иначе созданная задача пропадала после
+ * перезагрузки.
+ *
  * @returns задачу либо `null`, если черновик невалиден. Исключений не бросает:
  * решение «что показать человеку» принимает интерфейс, а не домен.
  */
 export function createTask(draft: TaskDraft, now: Date): Task | null {
   const title = normalizeTitle(draft.title)
   if (title === null) return null
+  if (!isValidDueDate(draft.dueDate)) return null
 
   return {
     id: crypto.randomUUID(),
