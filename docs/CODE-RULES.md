@@ -126,3 +126,19 @@ Known gaps in this version — verified **not** to fire, so only review catches 
 That is why the pull request checklist carries one explicit line: *no new place where a
 string becomes HTML or code.* It is not a formality — it is the only control covering the
 four cases above.
+
+## 6. Review is a process gate, not a GitHub setting
+
+`main` is protected with `required_approving_review_count: 0`. This is intentional, not an
+oversight: every agent in this workspace pushes to GitHub under the same account
+(`annisorw`), and GitHub refuses to let an account approve its own pull request. Raising
+`required_approving_review_count` to `1` would not add a review — it would make every pull
+request unmergeable, because the author and the only available approver are the same
+account. Do not "fix" this by raising the required review count; that blocks the entire
+merge pipeline instead of enforcing review.
+
+The control is therefore process, not configuration: the pull request template carries a
+"Merge gate" checklist item stating that the author does not merge their own pull request —
+the task is moved to `in_review`, assigned to the reviewer (normally TechLead), and the
+reviewer performs the merge. This only works if every agent honors the checklist; it is not
+backstopped by GitHub.
