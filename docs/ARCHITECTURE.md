@@ -1,0 +1,212 @@
+# Архитектура Aurora Tasks
+
+Версия 1.1 · владелец документа — TechLead · задача [FELA-6](/FELA/issues/FELA-6)
+
+Версия 1.1 приведена в соответствие с дизайн-спекой v1.1: правка задачи меняет все три поля (текст, приоритет, срок), поэтому `PrioritySelect` и `DueDatePicker` переехали в `components/`, а действие `task/edit` принимает патч, а не только заголовок.
+
+Этот документ — контракт разработки. Дизайн-спека (`docs/design-spec.md`) говорит, **как выглядит и ведёт себя** приложение; этот документ говорит, **где что лежит в коде**. Если нужно отступить от него — сначала обсуждение в задаче, потом код, а не наоборот.
+
+Имена папок, типов, файлов и токенов — английские, берутся в код как есть. Описания — русские.
+
+---
+
+## 1. Стек и границы
+
+| Решение | Значение | Почему |
+|---|---|---|
+| UI | React 19 + TypeScript (strict) | уже в репозитории |
+| Сборка | Vite 8 | уже в репозитории |
+| Стили | Tailwind CSS v4 поверх слоя CSS-токенов | утилиты быстрые, а значения всё равно обязаны приходить из токенов |
+| Анимации | Framer Motion | уже в репозитории |
+| Drag & drop | Framer Motion `Reorder` + собственный хук клавиатурного перемещения | **ноль новых runtime-зависимостей** |
+| Тесты | Vitest + Testing Library + jsdom | уже в репозитории |
+| Хранилище | `localStorage` | сервера нет по условию |
+
+**Новых runtime-зависимостей не добавляем.** Это осознанное решение (*boring technology*): всё из спеки — стекло, сияние, FLIP-переукладка, drag & drop, тосты, модалы — делается тем, что уже стоит. Если задача упирается в отсутствие библиотеки, это не повод её поставить молча: пишете в свою задачу, зачем именно она, и ждёте решения TechLead и ревью Security. Новые **dev**-зависимости (например `axe-core` для теста доступности) — по тому же правилу.
+
+Отдельно про `@dnd-kit`: он умеет клавиатурный drag «из коробки», но тянет 4 пакета, а спека (раздел 6.4) описывает ровно те объявления в `LiveRegion`, которые нам всё равно пришлось бы переписывать под себя. Поэтому handle-drag на `useDragControls` + свой хук на ~80 строк дешевле по *cost of change*.
+
+---
+
+## 2. Структура папок
+
+```
+src/
+  main.tsx                     точка входа, монтирует провайдеры
+  App.tsx                      композиция экрана, без бизнес-логики
+
+  styles/
+    index.css                  @import tailwindcss + tokens.css + base.css
+    tokens.css                 ВСЕ значения из спеки (разделы 2.1-2.9), :root и [data-theme]
+    base.css                   reset, @supports-фолбэк без blur, базовый reduced-motion
+
+  domain/                      чистый TypeScript, ни одного импорта React
+    task.ts                    Task, Priority, фабрики, инварианты, лимит 500 символов
+    taskList.ts                чистые операции над списком: add/toggle/edit/remove/move/restore
+    filters.ts                 фильтр + поиск + счётчики (чистые селекторы)
+    dueDate.ts                 подписи «Сегодня / Завтра / Пт, 24 окт» и расчёт просрочки
+
+  storage/
+    localStorageDriver.ts      обёртка над localStorage, исключения -> типизированный результат
+    taskStorage.ts             схема v1, валидация прочитанного, сериализация
+    useDebouncedPersist.ts     запись с debounce 250 мс
+
+  state/
+    taskReducer.ts             чистый reducer: единственный источник правды по данным
+    TaskStoreProvider.tsx      context + useReducer + гидратация + персист
+    useTaskStore.ts            хуки-селекторы для компонентов
+    ThemeProvider.tsx          тема, data-theme на <html>, запись выбора
+    ToastProvider.tsx          очередь тостов, таймеры с паузой
+
+  components/                  система из раздела 3 спеки: презентационные, без бизнес-логики
+    Button.tsx  IconButton.tsx  Checkbox.tsx  PriorityChip.tsx  DueDateChip.tsx
+    PrioritySelect.tsx  DueDatePicker.tsx
+    Tooltip.tsx  Skeleton.tsx  Menu.tsx  Toast.tsx  ConfirmDialog.tsx
+    ErrorBanner.tsx  EmptyState.tsx  ProgressRing.tsx  SegmentedControl.tsx
+    LiveRegion.tsx  ShortcutsSheet.tsx
+
+  features/                    экранная логика, связывает стор и компоненты
+    composer/   Composer.tsx  ComposerSheet.tsx
+    task-list/  TaskList.tsx  TaskRow.tsx  TaskEditor.tsx  TaskEditorSheet.tsx
+                CompletedSection.tsx  useTaskReorder.ts  useRovingFocus.ts
+    toolbar/    Toolbar.tsx  SearchField.tsx  FilterTabs.tsx  useStickyBand.ts
+    shortcuts/  useGlobalShortcuts.ts
+
+  layout/
+    AppShell.tsx  AppHeader.tsx  AuroraBackground.tsx  ThemeToggle.tsx
+    Hero.tsx  Fab.tsx
+
+  lib/
+    cn.ts  useDebouncedValue.ts  useMediaQuery.ts  announce.ts
+
+  test/
+    setupTests.ts  factories.ts   фабрики тестовых задач
+```
+
+Правила, которые делают структуру рабочей, а не декоративной:
+
+- **`domain/` не знает про React, `components/` не знает про стор.** Логика тестируется без рендера, компоненты — без моков хранилища. Если компоненту нужны данные, он получает их пропсами от `features/`.
+- **`components/` против `features/`.** В `components/` живёт то, что можно переиспользовать и описать одними пропсами. В `features/` — то, что знает про конкретный экран и дёргает стор. Компонент, который сам читает `useTaskStore`, обязан лежать в `features/`.
+- **`PrioritySelect` и `DueDatePicker` лежат в `components/`, а не внутри `composer/`.** По спеке v1.1 у них три места вызова: `Composer`, `TaskEditor` и быстрый путь прямо из строки на десктопе. Три копии одного пикера — это три разных поведения через месяц, поэтому они управляются пропсами `value` / `onChange` и ничего не знают ни про стор, ни про то, кто их открыл.
+- Один компонент — один файл. Папка на компонент заводится, только когда появляется второй файл (стили, тест, подкомпонент).
+- Тест лежит рядом с тестируемым файлом: `taskList.ts` → `taskList.test.ts`.
+
+---
+
+## 3. Модель данных
+
+```ts
+// src/domain/task.ts
+export type Priority = 'none' | 'low' | 'medium' | 'high'
+
+export interface Task {
+  /** crypto.randomUUID() */
+  id: string
+  /** 1..500 символов, уже обрезанный по краям */
+  title: string
+  priority: Priority
+  /** 'YYYY-MM-DD' — дата без времени, как решено в спеке; null = срока нет */
+  dueDate: string | null
+  /** ISO-метка выполнения; null = задача активная */
+  completedAt: string | null
+  /** ISO, не меняется */
+  createdAt: string
+}
+```
+
+Пять решений, которые нельзя переигрывать в коде:
+
+1. **`done` — не поле, а производное:** `isDone(task) === task.completedAt !== null`. Отдельный boolean рядом с меткой времени — это два источника правды, которые разъедутся (*one source of truth*). Секция `Выполнено` сортируется по `completedAt` вниз от новых, тоже без отдельного поля.
+2. **Правка — это патч, а не присваивание заголовка.** `TaskPatch = Partial<Pick<Task, 'title' | 'priority' | 'dueDate'>>`. По спеке v1.1 (3.11a) редактор меняет текст, приоритет и срок разом, а быстрый путь из строки — одно поле. Один патч-путь на оба случая вместо трёх отдельных действий.
+3. **Ручной порядок — это позиция в массиве `tasks`.** Поля `order` нет. Автосортировок нет (спека, раздел 1), значит массив и есть порядок, а `move(from, to)` — его единственный мутатор.
+4. **`dueDate` — строка `YYYY-MM-DD`, не `Date`.** `Date` в `localStorage` всё равно превращается в строку, а часовой пояс на сериализации сдвигает дату на сутки. Сравнение с «сегодня» — тоже по локальной строке `YYYY-MM-DD`.
+5. **Фильтр, поисковый запрос, открытое меню, режим правки — это не данные, а состояние интерфейса.** В `Task` и в `localStorage` их нет.
+
+---
+
+## 4. Состояние
+
+Один `useReducer` в `TaskStoreProvider`, чистый `taskReducer`. Никакого стороннего стор-менеджера: на одном списке задач он не окупается.
+
+```ts
+export type TaskAction =
+  | { type: 'tasks/hydrate';       tasks: Task[] }
+  | { type: 'task/add';            draft: TaskDraft }
+  | { type: 'task/toggle';         id: string }
+  | { type: 'task/edit';           id: string; patch: TaskPatch }
+  | { type: 'task/remove';         id: string }
+  | { type: 'task/restoreRemoved' }
+  | { type: 'task/move';           from: number; to: number }
+  | { type: 'tasks/clearCompleted' }
+
+export interface TaskState {
+  tasks: Task[]
+  /** последняя удалённая задача и её прежний индекс; живёт до следующего изменения списка */
+  lastRemoved: { task: Task; index: number } | null
+  storageError: StorageError | null
+}
+```
+
+- `lastRemoved` сбрасывается любым следующим действием, меняющим список — это ровно то поведение undo, которое описано в спеке (раздел S7), и оно живёт в reducer, а не в компоненте тоста.
+- Снятие галочки возвращает задачу **на прежнее место среди активных** (критерий приёмки 7). Поэтому `task/toggle` не переставляет элементы массива: порядок один, а разбиение на «активные / выполненные» считается селектором в `filters.ts`.
+- Состояние интерфейса (фильтр, запрос, `editingId`) — локальный `useState` в `features/`, вверх не поднимается без нужды.
+- Все действия именуются `domain/verb` и ничего не делают с `localStorage` сами. Персист — отдельный эффект поверх стора.
+
+---
+
+## 5. Хранение
+
+| Ключ | Что внутри |
+|---|---|
+| `aurora.tasks.v1` | `{ "version": 1, "tasks": Task[] }` |
+| `aurora.theme` | `"light"` / `"dark"` |
+
+- **Чтение** — один раз при старте, синхронно до первого рендера списка. Прочитанное **обязательно валидируется** своим узким валидатором (без новой библиотеки): неизвестные поля отбрасываем, задачи с битыми полями пропускаем, полностью нечитаемый JSON → `storageError: 'corrupted'` и пустой список в памяти.
+- **Запись** — с debounce 250 мс, по изменению `tasks`.
+- **Ошибки не глотаем.** `localStorageDriver` возвращает результат, а не бросает: `'blocked'` (приватный режим), `'quota'`, `'corrupted'`. Любая из них поднимает `ErrorBanner` (спека, S9), и приложение **продолжает работать в памяти**. `catch {}` без обработки в этом слое — повод не принять pull request (*fail loud in development, fail safe in production*).
+- **Версия в ключе и в данных.** Сегодня миграций нет; `version: 1` — это место, куда их добавят, не ломая чужие данные.
+- Личных данных, токенов и аналитики не пишем. Наружу не уходит ничего: сети в приложении нет вообще.
+
+---
+
+## 6. Токены и Tailwind
+
+`styles/tokens.css` — единственное место, где есть числа и цвета из спеки. Темы — `:root` (dark) и `[data-theme='light']`.
+
+Значения прокидываются в Tailwind через `@theme`, поэтому в разметке пишут `bg-surface-1`, `text-secondary`, `rounded-lg`, а не `bg-[#17172A]`. Хардкод цвета, отступа, радиуса, тени или длительности в компоненте — отказ на ревью (критерий приёмки 1).
+
+Тема ставится атрибутом `data-theme` на `<html>`. Чтобы не было вспышки белого (критерий приёмки 2), атрибут выставляет короткий инлайн-скрипт в `index.html` до первой отрисовки: читает `aurora.theme`, иначе `prefers-color-scheme`. Скрипт статический, без `eval` и без внешних источников.
+
+---
+
+## 7. Доступность и движение — где это живёт в коде
+
+Не «потом допилим», а конкретные места:
+
+- `components/LiveRegion.tsx` + `lib/announce.ts` — единственный канал объявлений (поиск, фильтр, перемещение, удаление/возврат, смена темы).
+- `features/task-list/useRovingFocus.ts` — roving tabindex по строкам (спека, раздел 7).
+- `features/task-list/useTaskReorder.ts` — мышиное **и** клавиатурное перемещение через одно действие `task/move`. Мышиный drag без клавиатурной альтернативы не принимается.
+- `features/shortcuts/useGlobalShortcuts.ts` — горячие клавиши из раздела 6.3, и только они.
+- Длительности и easing — из токенов `--duration-*` / `--ease-*`; `prefers-reduced-motion` обрабатывается по таблице раздела 5 спеки.
+
+---
+
+## 8. Что проверяется автотестом
+
+Тестируем логику и то, что может сломаться, а не геттеры и не фреймворк (*test what can break*):
+
+- `domain/` — операции над списком, границы (пустой текст, 500 символов, перемещение за пределы), фильтр + поиск вместе, подписи и просрочка срока.
+- `state/taskReducer.ts` — каждое действие, в том числе undo и его сброс.
+- `storage/` — валидация битых данных, недоступный `localStorage`, исчерпанная квота.
+- Токены — автотест контраста по таблицам 2.1-2.2 спеки (текст ≥ 4.5:1, `--color-control-border` ≥ 3:1).
+- Клавиатурные сценарии — добавление, правка, перемещение, удаление и возврат только с клавиатуры.
+
+---
+
+## 9. Процесс
+
+- Ветка на задачу: `feat/<short-name>`, `fix/<short-name>`, `docs/<short-name>`. Прямых коммитов в `main` нет.
+- Один pull request — одна задача. Если ревьюер не может удержать диффа в голове, его делят (*smallest reviewable change*).
+- Коммиты — Conventional Commits, по-английски, с номером задачи: `feat: add task list reducer (FELA-9)`.
+- Merge только с зелёным CI (`lint`, `typecheck`, `test`, `build`) и ревью TechLead.
+- Открыли pull request — ставите свою задачу в `in_review` и оставляете ссылку на PR комментарием к родительской задаче [FELA-6](/FELA/issues/FELA-6). Это сигнал на ревью.
