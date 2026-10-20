@@ -6,6 +6,7 @@ import {
   isDueToday,
   isOverdue,
   isValidDateKey,
+  isValidDueDate,
   toDateKey,
 } from './dueDate'
 
@@ -38,6 +39,19 @@ describe('isValidDateKey', () => {
     expect(isValidDateKey('2027-02-29')).toBe(false)
     expect(isValidDateKey('20.10.2026')).toBe(false)
     expect(isValidDateKey('')).toBe(false)
+  })
+})
+
+describe('isValidDueDate', () => {
+  it('считает годным отсутствие срока', () => {
+    expect(isValidDueDate(null)).toBe(true)
+    expect(isValidDueDate(undefined)).toBe(true)
+  })
+
+  it('пропускает настоящую дату и отклоняет несуществующую', () => {
+    expect(isValidDueDate('2026-10-20')).toBe(true)
+    expect(isValidDueDate('2026-02-30')).toBe(false)
+    expect(isValidDueDate('not-a-date')).toBe(false)
   })
 })
 
