@@ -32,13 +32,12 @@ export function AppHeader() {
 
         <div className="flex items-center gap-(--space-2)">
           <IconButton
+            icon={<KeyboardIcon />}
             aria-label="Горячие клавиши"
             aria-expanded={shortcutsOpen}
             aria-controls={panelId}
             onClick={() => setShortcutsOpen((open) => !open)}
-          >
-            <KeyboardIcon />
-          </IconButton>
+          />
           <ThemeToggle />
         </div>
 
