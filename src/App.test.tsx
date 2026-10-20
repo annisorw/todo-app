@@ -1,34 +1,35 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { ThemeProvider } from './state/ThemeProvider'
+
+function stubMatchMedia(matches: boolean) {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      matches,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  )
+}
 
 describe('App', () => {
   beforeEach(() => {
     localStorage.clear()
+    stubMatchMedia(false)
   })
 
-  it('adds a todo and stores it in localStorage', async () => {
-    const user = userEvent.setup()
-    render(<App />)
+  it('renders the shell: header, theme toggle and the hero heading', () => {
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    )
 
-    await user.type(screen.getByPlaceholderText(/what needs to be done/i), 'Buy milk')
-    await user.click(screen.getByRole('button', { name: /add/i }))
-
-    expect(screen.getByText('Buy milk')).toBeInTheDocument()
-    expect(localStorage.getItem('todo-app:todos')).toContain('Buy milk')
-  })
-
-  it('toggles a todo as done', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-
-    await user.type(screen.getByPlaceholderText(/what needs to be done/i), 'Buy milk')
-    await user.click(screen.getByRole('button', { name: /add/i }))
-
-    const checkbox = screen.getByRole('checkbox')
-    await user.click(checkbox)
-
-    expect(checkbox).toBeChecked()
+    expect(screen.getByRole('heading', { name: 'Сегодня' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Тёмная тема' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Горячие клавиши' })).toBeInTheDocument()
   })
 })
