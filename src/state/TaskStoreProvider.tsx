@@ -1,0 +1,97 @@
+import { useCallback, useMemo, useReducer } from 'react'
+import type { ReactNode } from 'react'
+import type { TaskDraft, TaskPatch } from '../domain/task'
+import { isAtTaskLimit } from '../domain/taskList'
+import type { StorageError } from '../storage/localStorageDriver'
+import { readTasks } from '../storage/taskStorage'
+import { useDebouncedPersist } from '../storage/useDebouncedPersist'
+import { EMPTY_TASK_STATE, taskReducer } from './taskReducer'
+import type { TaskState } from './taskReducer'
+import { TaskStoreContext } from './useTaskStore'
+import type { TaskStoreValue } from './useTaskStore'
+
+/**
+ * Гидратация читает хранилище синхронно, до первого рендера списка
+ * (архитектура, раздел 5): иначе список успеет мигнуть пустым.
+ *
+ * Отказ хранилища сразу попадает в `storageError` — приложение продолжает
+ * работать в памяти, а человек видит `ErrorBanner` и знает, что его правки не
+ * сохранятся.
+ */
+function hydrate(): TaskState {
+  const { tasks, error } = readTasks()
+  return { ...EMPTY_TASK_STATE, tasks, storageError: error }
+}
+
+export function TaskStoreProvider({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(taskReducer, null, hydrate)
+
+  const handlePersistError = useCallback((error: StorageError) => {
+    dispatch({ type: 'storage/error', error })
+  }, [])
+
+  useDebouncedPersist(state.tasks, handlePersistError)
+
+  // Системные часы читаются здесь, на границе: reducer и домен остаются чистыми.
+  const addTask = useCallback((draft: TaskDraft) => {
+    dispatch({ type: 'task/add', draft, now: new Date() })
+  }, [])
+
+  const toggleTask = useCallback((id: string) => {
+    dispatch({ type: 'task/toggle', id, now: new Date() })
+  }, [])
+
+  const editTask = useCallback((id: string, patch: TaskPatch) => {
+    dispatch({ type: 'task/edit', id, patch })
+  }, [])
+
+  const removeTask = useCallback((id: string) => {
+    dispatch({ type: 'task/remove', id })
+  }, [])
+
+  const restoreRemoved = useCallback(() => {
+    dispatch({ type: 'task/restoreRemoved' })
+  }, [])
+
+  const moveTask = useCallback((from: number, to: number) => {
+    dispatch({ type: 'task/move', from, to })
+  }, [])
+
+  const clearCompleted = useCallback(() => {
+    dispatch({ type: 'tasks/clearCompleted' })
+  }, [])
+
+  const dismissStorageError = useCallback(() => {
+    dispatch({ type: 'storage/error', error: null })
+  }, [])
+
+  const value = useMemo<TaskStoreValue>(
+    () => ({
+      tasks: state.tasks,
+      lastRemoved: state.lastRemoved,
+      storageError: state.storageError,
+      isAtLimit: isAtTaskLimit(state.tasks),
+      addTask,
+      toggleTask,
+      editTask,
+      removeTask,
+      restoreRemoved,
+      moveTask,
+      clearCompleted,
+      dismissStorageError,
+    }),
+    [
+      state,
+      addTask,
+      toggleTask,
+      editTask,
+      removeTask,
+      restoreRemoved,
+      moveTask,
+      clearCompleted,
+      dismissStorageError,
+    ],
+  )
+
+  return <TaskStoreContext.Provider value={value}>{children}</TaskStoreContext.Provider>
+}
