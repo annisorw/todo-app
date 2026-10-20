@@ -54,6 +54,18 @@ export function isValidDateKey(value: string): boolean {
 }
 
 /**
+ * Годен ли срок на входе домена: `null` и отсутствие поля — это «срока нет»,
+ * всё остальное обязано обозначать существующий день.
+ *
+ * Отдельная функция нужна, чтобы один и тот же вопрос из `createTask` и
+ * `updateTask` имел один ответ, а формат даты остался только здесь.
+ */
+export function isValidDueDate(dueDate: string | null | undefined): boolean {
+  if (dueDate === null || dueDate === undefined) return true
+  return isValidDateKey(dueDate)
+}
+
+/**
  * Разница в днях: положительная, если `key` позже `fromKey`.
  *
  * Считается в UTC, поэтому перевод часов внутри интервала не сдвигает результат.

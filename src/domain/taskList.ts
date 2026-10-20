@@ -1,3 +1,4 @@
+import { isValidDueDate } from './dueDate'
 import { MAX_TASKS } from './limits'
 import { createTask, isDone, normalizeTitle } from './task'
 import type { Task, TaskDraft, TaskPatch } from './task'
@@ -59,6 +60,9 @@ export function toggleTask(tasks: Task[], id: string, now: Date): Task[] {
  * Текст валидируется, только если `title` есть в патче. Пустой текст — не ошибка
  * данных и не удаление: решение «пустой текст = отмена правки» принимает
  * интерфейс (спека, критерий приёмки 5), а домен просто ничего не меняет.
+ *
+ * Срок — так же: негодная дата оставляет список прежним, тем же `isValidDueDate`,
+ * что и в `createTask`. `null` при этом остаётся осмысленным «срок убран».
  */
 export function updateTask(tasks: Task[], id: string, patch: TaskPatch): Task[] {
   const index = tasks.findIndex((task) => task.id === id)
@@ -74,7 +78,10 @@ export function updateTask(tasks: Task[], id: string, patch: TaskPatch): Task[] 
   }
   if (patch.priority !== undefined) next.priority = patch.priority
   // `null` — осмысленное значение «срок убран», поэтому сравнение именно с undefined.
-  if (patch.dueDate !== undefined) next.dueDate = patch.dueDate
+  if (patch.dueDate !== undefined) {
+    if (!isValidDueDate(patch.dueDate)) return tasks
+    next.dueDate = patch.dueDate
+  }
 
   const changed =
     next.title !== task.title ||
