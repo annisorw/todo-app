@@ -1,0 +1,64 @@
+name: Check curl-pinned binary versions
+
+on:
+  schedule:
+    - cron: '0 4 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compare pinned versions against upstream latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          check() {
+            local name="$1" repo="$2" pinned="$3"
+            local latest
+            latest=$(gh api "repos/${repo}/releases/latest" --jq '.tag_name' | sed 's/^v//')
+            echo "${name}: pinned=v${pinned} latest=v${latest}"
+
+            if [ "${pinned}" = "${latest}" ]; then
+              echo "${name} is up to date"
+              return
+            fi
+
+            local title="CI pin drift: ${name} pin is behind upstream"
+            local existing
+            existing=$(gh issue list --state open --limit 100 --json title \
+              | jq --arg t "${title}" '[.[] | select(.title == $t)] | length')
+            if [ "${existing}" -gt 0 ]; then
+              echo "An open issue already tracks this drift for ${name}, skipping"
+              return
+            fi
+
+            local body="Dependabot does not see this pin: \`${name}\` is downloaded via \`curl\` in CI, not referenced with a GitHub Actions \`uses:\`, so the \`github-actions\` ecosystem in \`.github/dependabot.yml\` cannot track it."
+            body="${body}"$'\n\n'"- Pinned in this repo: v${pinned}"
+            body="${body}"$'\n'"- Latest upstream release (${repo}): v${latest}"
+            body="${body}"$'\n\n'"To fix, bump the version and its SHA256 checksum, verified against upstream's \`*_checksums.txt\` release asset:"
+            body="${body}"$'\n'"- gitleaks: \`.github/actions/install-gitleaks/action.yml\`"
+            body="${body}"$'\n'"- OSV-Scanner: \`.github/workflows/ci.yml\` (\`OSV_SCANNER_VERSION\` / \`OSV_SCANNER_SHA256\`)"
+            body="${body}"$'\n\n'"Opened automatically by \`.github/workflows/check-pin-drift.yml\`."
+
+            gh issue create --title "${title}" --body "${body}"
+          }
+
+          gitleaks_pinned=$(grep -m1 '^\s*GITLEAKS_VERSION:' .github/actions/install-gitleaks/action.yml | sed 's/.*: *//')
+          osv_pinned=$(grep -m1 '^\s*OSV_SCANNER_VERSION:' .github/workflows/ci.yml | sed 's/.*: *//')
+
+          check "gitleaks" "gitleaks/gitleaks" "${gitleaks_pinned}"
+          check "OSV-Scanner" "google/osv-scanner" "${osv_pinned}"
