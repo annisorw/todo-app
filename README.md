@@ -17,3 +17,8 @@ npm run test        # run the test suite
 ## Requirements
 
 - Node.js 24+
+
+## Documentation
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — folder layout, data model, state and storage contract. Read this before writing code.
+- [`docs/design-spec.md`](docs/design-spec.md) — design tokens, components, screen states and acceptance criteria.
