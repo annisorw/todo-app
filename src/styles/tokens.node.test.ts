@@ -67,6 +67,7 @@ const NOT_A_FOREGROUND = [
   '--color-accent',
   '--color-accent-hover',
   '--color-accent-active',
+  '--color-modal-backdrop',
 ] as const
 
 /**
@@ -304,6 +305,18 @@ describe('coverage', () => {
   })
 })
 
+describe('z-index scale', () => {
+  it('matches the scale in design-spec 2.9', () => {
+    const scale = ['--z-base', '--z-sticky', '--z-dropdown', '--z-drag', '--z-modal', '--z-toast']
+    expect(scale.map((name) => DARK_TOKENS[name])).toEqual(['0', '10', '100', '200', '300', '400'])
+  })
+
+  // --z-content is this repo's own token, not part of the spec's scale above.
+  it('keeps --z-content below --z-sticky', () => {
+    expect(Number(DARK_TOKENS['--z-content'])).toBeLessThan(Number(DARK_TOKENS['--z-sticky']))
+  })
+})
+
 describe('the contrast check itself', () => {
   it('rejects a colour that is too weak against the dark surface', () => {
     // #6A6A85 is the dark control border: fine as a 3:1 outline, far too weak
@@ -330,5 +343,42 @@ describe('the contrast check itself', () => {
     const inherited = compositeOver(parseRgbaColor('rgba(255,255,255,.05)').color, 0.05, lightSurface)
 
     expect(contrastRatio(inherited, lightSurface)).toBeLessThan(SKELETON_MIN_RATIO)
+  })
+})
+
+/**
+ * Mono always weighs 400 (design-spec v1.4, acceptance criterion 35, FELA-54).
+ * The repository ships only the 400 static cut of JetBrains Mono (fonts.css);
+ * anything heavier is the browser faking bold. This guards both directions of
+ * the mistake: the mono weight drifting off 400, and someone "fixing" the
+ * small-text hierarchy by flattening it to 400 too — text-caption/label/micro
+ * are tuned for Inter and are explicitly out of scope here (spec 2.5).
+ */
+describe('mono font weight', () => {
+  it('pins --font-mono--font-weight to 400', () => {
+    expect(DARK_TOKENS['--font-mono--font-weight']).toBe('400')
+  })
+
+  it('leaves the Inter text-* weights untouched', () => {
+    expect(DARK_TOKENS['--text-caption--font-weight']).toBe('500')
+    expect(DARK_TOKENS['--text-label--font-weight']).toBe('550')
+    expect(DARK_TOKENS['--text-micro--font-weight']).toBe('600')
+  })
+
+  /**
+   * Tailwind's text-* utilities read font-weight through --tw-font-weight and
+   * print after hand-written @utility blocks in the bundle, so a plain
+   * `font-weight` declaration here loses to e.g. .text-caption on source
+   * order alone (measured in real Chromium — jsdom does not expand var() and
+   * cannot catch this). Setting the Tailwind variable is what actually makes
+   * criterion 35 hold under `class="text-caption text-mono-num"`; without
+   * this line the fix is easy to mistake for a stray duplicate and delete.
+   */
+  it('wins over text-* utilities by setting --tw-font-weight', () => {
+    const utilityBlock = CSS_WITHOUT_COMMENTS.match(
+      /@utility text-mono-num\s*{([^}]*)}/,
+    )?.[1]
+    expect(utilityBlock).toBeDefined()
+    expect(utilityBlock).toContain('--tw-font-weight: var(--font-mono--font-weight)')
   })
 })

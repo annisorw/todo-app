@@ -59,6 +59,11 @@
   --skeleton-base: rgba(255,255,255,.05);
   --skeleton-shine: rgba(255,255,255,.11);
 
+  /* Modal backdrop (spec 3.16). Decorative, carries no text, and the spec
+   * gives one value for both themes — same reasoning as --color-accent
+   * staying unlisted in the light block below. */
+  --color-modal-backdrop: rgba(3,3,10,.55);
+
   /* ---- 2.3 Gradient ------------------------------------------------------- */
   /* Text on --gradient-accent is forbidden: the cyan end gives 2.45:1 on white.
    * Allowed: AuroraBackground, ProgressRing fill, checked Checkbox, the `+`
@@ -85,6 +90,10 @@
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   /* Counters and <kbd> only. */
   --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  /* The only static cut of JetBrains Mono in the repo is 400 (fonts.css); a
+   * heavier weight is the browser faking bold by outlining the glyph, which
+   * shows as a blurred digit at 11-13 px (design-spec v1.4, criterion 35). */
+  --font-mono--font-weight: 400;
 
   --text-display: 40px;
   --text-display--line-height: 44px;
@@ -155,6 +164,10 @@
 
   --blur-surface: 20px;
   --blur-aurora: 90px;
+  /* Sticky toolbar band only (design-spec S1): the spec fixes this at 16px,
+   * a different value from --blur-surface, so it gets its own token instead
+   * of a literal in the component. */
+  --blur-sticky: 16px;
 
   /* ---- 2.8 Motion --------------------------------------------------------- */
   /* Doherty: any response to input stays within --duration-fast. Longer is only
@@ -183,12 +196,22 @@
   --layout-gutter: var(--space-6);
 
   --z-base: 0;
-  --z-content: 10;
-  --z-sticky: 20;
+  --z-content: 1;
+  --z-sticky: 10;
   --z-dropdown: 100;
   --z-drag: 200;
   --z-modal: 300;
   --z-toast: 400;
+
+  /* ---- Component sizes off the 4 px grid (spec 3.10, 3.16, 3.24) ---------- */
+  /* Checkbox circle diameter: 22 px desktop. Not a --space-* multiple, so it
+   * gets its own token instead of an arbitrary value in the component. */
+  --size-checkbox: 22px;
+  /* ConfirmDialog panel width (spec 3.16). */
+  --size-modal-md: 480px;
+  /* Fab diameter (spec 3.24). Fab itself isn't built yet, but the mobile
+   * toast viewport (spec 3.17) already needs to sit above it. */
+  --size-fab: 56px;
 }
 
 /* ---- 2.2 Colour — light --------------------------------------------------- */
@@ -259,6 +282,9 @@
     --layout-header-h: 56px;
     --layout-row-h: 64px;
     --layout-gutter: var(--space-4);
+
+    /* Checkbox circle diameter: 26 px on mobile (spec 3.10). */
+    --size-checkbox: 26px;
   }
 }
 
@@ -266,8 +292,8 @@
 /* Most tokens above already produce theme-aware utilities, because Tailwind
  * compiles them to a `var()` reference: `bg-surface-1`, `border-surface-border`,
  * `rounded-lg`, `text-body`, `ease-out-soft`, `max-w-(--layout-content-max)`.
- * Two groups need help, and both are about staying theme-aware rather than about
- * adding new values.
+ * Three groups need help, and all three are about staying theme-aware rather
+ * than about adding new values.
  *
  * 1. Text colours. Tailwind's text-colour utility is also `text-*`, so the
  *    spec's `--color-text-secondary` would have to be written
@@ -279,6 +305,10 @@
  *    geometry and colour under `[data-theme='light']` — wrong, and invisible
  *    until someone screenshots the light theme. Overriding the utilities makes
  *    `shadow-md` read the token, so there is no silently-wrong spelling.
+ *
+ * 3. Gradients. `--gradient-accent` is a `background-image`, not a colour, so
+ *    Tailwind's variable shorthand on `bg-*` (`background-color`) would set the
+ *    wrong property. This utility gives it a name that sets the right one.
  *
  * Tokens with no Tailwind namespace (`--duration-*`, `--z-*`, `--space-*`,
  * `--layout-*`, `--blur-*`) are used via `var()` in component CSS or via
@@ -313,4 +343,23 @@
 }
 @utility shadow-drag {
   box-shadow: var(--shadow-drag);
+}
+
+/* The only entry point into mono (CODE-RULES.md section 8): weight is pinned
+ * to --font-mono--font-weight, never inherited from a surrounding text-* token
+ * (design-spec v1.4, criterion 35), and tabular-nums is bundled in because it
+ * is the reason counters use mono at all — a digit must not reflow the layout
+ * on 9 -> 10. */
+@utility text-mono-num {
+  font-family: var(--font-mono);
+  /* Tailwind's text-* utilities read weight from this variable and print
+   * after hand-written @utility blocks, so they win on source order unless
+   * we set it here too — this is what actually fixes criterion 35 when
+   * combined with text-caption/text-label/text-micro. */
+  --tw-font-weight: var(--font-mono--font-weight);
+  font-weight: var(--font-mono--font-weight);
+  font-variant-numeric: tabular-nums;
+}
+@utility bg-gradient-accent {
+  background-image: var(--gradient-accent);
 }

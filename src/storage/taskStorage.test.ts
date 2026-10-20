@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { addTask, toggleTask } from '../domain/taskList'
 import { makeTask, makeTasks } from '../test/factories'
 import { blockedError, quotaError, storedItems, storedPayload, stubLocalStorage } from '../test/storage'
 import type { StorageStub } from '../test/storage'
@@ -219,6 +220,40 @@ describe('taskStorage', () => {
       expect(result.tasks).toHaveLength(2)
       expect(result.droppedCount).toBe(2)
       expect(result.error).toBeNull()
+    })
+  })
+
+  /**
+   * Полный круг: граница записи и граница чтения обязаны соглашаться друг с другом.
+   *
+   * `parseTask` **пересобирает** задачу по известным полям, поэтому поле,
+   * добавленное в `Task` и `createTask`, но забытое в разборщике, молча теряется
+   * при перезагрузке. Сегодня таких полей нет; тест стоит здесь, чтобы
+   * завтрашнее не проехало незамеченным.
+   *
+   * Сравнение идёт целиком, а не по отдельным полям: проверка вида
+   * `expect(read.dueDate).toBe(...)` забытое поле как раз и не увидит.
+   */
+  describe('full circle: addTask -> envelope -> parseStoredTasks', () => {
+    const CREATED_AT = new Date('2026-10-20T09:00:00.000Z')
+    const COMPLETED_AT = new Date('2026-10-20T12:30:00.000Z')
+
+    it('keeps every field of a task the write boundary produced', () => {
+      const added = addTask([], { title: 'Собрать отчёт', priority: 'high', dueDate: '2026-10-25' }, CREATED_AT)
+      const written = toggleTask(added, added[0]?.id ?? '', COMPLETED_AT)
+
+      // Круг не должен сойтись на пустом списке или на полях со значениями по
+      // умолчанию: там он сравнил бы «ничего» с «ничем» и всё равно позеленел.
+      expect(written).toHaveLength(1)
+      expect(written[0]?.priority).not.toBe('none')
+      expect(written[0]?.dueDate).not.toBeNull()
+      expect(written[0]?.completedAt).not.toBeNull()
+
+      expect(parseStoredTasks(storedPayload(written))).toEqual({
+        tasks: written,
+        error: null,
+        droppedCount: 0,
+      })
     })
   })
 })

@@ -50,6 +50,34 @@ body {
   }
 }
 
+/* ---- Sticky toolbar band (spec S1) ---------------------------------------- */
+/* Transparent until `useStickyBand` adds `.is-stuck` (the list has scrolled
+ * under it), then a translucent canvas + blur + a bottom fade so the edge
+ * doesn't read as a hard, dirty rectangle over scrolling rows. Plain CSS, not
+ * Tailwind utilities, because the mask gradient's syntax doesn't translate
+ * cleanly to an arbitrary-value class. */
+.toolbar-sticky {
+  background-color: transparent;
+  transition:
+    background-color var(--duration-base) var(--ease-standard),
+    backdrop-filter var(--duration-base) var(--ease-standard);
+}
+
+.toolbar-sticky.is-stuck {
+  background-color: var(--color-surface-1);
+  backdrop-filter: blur(var(--blur-sticky));
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - var(--space-3)), transparent 100%);
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--space-3)), transparent 100%);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .toolbar-sticky.is-stuck {
+    background-color: var(--color-surface-1-solid);
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
 /* ---- `aurora-drift` keyframes (spec 3.2, motion table 5) ------------------ */
 /* `AuroraBackground` applies this utility only outside
  * `prefers-reduced-motion` (checked in JS via `useMediaQuery`, not here),
@@ -66,6 +94,106 @@ body {
 
 @utility animate-aurora-drift {
   animation: aurora-drift var(--duration-aurora-drift) ease-in-out alternate infinite;
+}
+
+/* ---- Skeleton shimmer (spec 3.19 / motion table row "skeleton-shimmer") --- */
+/* Plain CSS, not a Tailwind utility: the 1400ms duration and the three-stop
+ * gradient aren't on any token scale, and `prefers-reduced-motion` needs to
+ * drop the gradient entirely (a static backing), not just freeze it — the
+ * global reduced-motion rule below only shortens animations, which would
+ * otherwise leave a frozen shimmer band instead of a flat fill. */
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-row {
+  background-color: var(--skeleton-base);
+  background-image: linear-gradient(90deg, var(--skeleton-base) 0%, var(--skeleton-shine) 50%, var(--skeleton-base) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1400ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-row {
+    background-image: none;
+    animation: none;
+  }
+}
+
+/* ---- Toast in/out (spec 3.17, motion table rows "toast-in" / "toast-out") - */
+/* 240ms and 160ms aren't on the --duration-* scale (same situation as
+ * skeleton-shimmer above): the motion table gives each entry its own
+ * literal duration, so these are transcribed, not picked from the scale. */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    translate: 0 var(--space-3);
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@utility animate-toast-in {
+  animation: toast-in 240ms var(--ease-out-soft);
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    translate: 0 0;
+  }
+  to {
+    opacity: 0;
+    translate: 0 var(--space-2);
+  }
+}
+
+@utility animate-toast-out {
+  /* 160ms is mirrored as `TOAST_EXIT_MS` in state/ToastProvider.tsx, which
+   * unmounts the toast on a timeout rather than `onAnimationEnd` (jsdom has
+   * no `AnimationEvent`, so that event is untestable there). Keep both in
+   * sync if this ever changes. */
+  animation: toast-out 160ms var(--ease-in-fast);
+}
+
+/* ---- Modal in (spec 3.16, motion table row "modal-in") ------------------- */
+/* No "modal-out" row exists in the motion table, so ConfirmDialog closes
+ * with no exit animation — that's the spec, not an oversight here. */
+@keyframes modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@utility animate-modal-backdrop-in {
+  /* 160ms is the backdrop's own figure from the motion table row; the panel
+   * below uses the 200ms table figure, which happens to equal --duration-base. */
+  animation: modal-backdrop-in 160ms var(--ease-out-soft);
+}
+
+@keyframes modal-panel-in {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@utility animate-modal-panel-in {
+  animation: modal-panel-in var(--duration-base) var(--ease-out-soft);
 }
 
 /* ---- Baseline reduced-motion rule (spec 5) -------------------------------- */
