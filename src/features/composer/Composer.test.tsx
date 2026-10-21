@@ -146,6 +146,24 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'Добавить задачу в список' })).toHaveFocus()
   })
 
+  it('still shows a focus indicator on desktop when the field is focused and in error (acceptance criterion 24)', async () => {
+    const user = userEvent.setup()
+    const { container } = renderComposer()
+
+    const field = screen.getByRole('textbox', { name: 'Текст новой задачи' })
+    await user.click(field)
+    await user.keyboard('{Enter}')
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Введите текст задачи.')
+    expect(field).toHaveFocus()
+
+    const panel = container.querySelector('[class*="radius-xl"]')
+    expect(panel).not.toBeNull()
+    // The border is busy showing validity (`border-danger`); the glow is the
+    // only thing left to show focus, so it must not be suppressed by the error.
+    expect(panel).toHaveClass('border-danger', 'shadow-glow-accent')
+  })
+
   it('on mobile, the Fab opens a bottom sheet with the same form, autofocused', async () => {
     const user = userEvent.setup()
     renderComposer()
@@ -158,6 +176,25 @@ describe('Composer', () => {
 
     await user.type(field, 'Из шторки{Enter}')
     expect(screen.getByText('Из шторки')).toBeInTheDocument()
+  })
+
+  it('still shows a focus indicator in the sheet when the field is focused and in error (acceptance criterion 24)', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    await user.click(screen.getByRole('button', { name: 'Добавить задачу' }))
+    const dialog = screen.getByRole('dialog', { name: 'Добавить задачу' })
+    const field = within(dialog).getByRole('textbox', { name: 'Текст новой задачи' })
+    expect(field).toHaveFocus()
+
+    await user.keyboard('{Enter}')
+
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Введите текст задачи.')
+    expect(field).toHaveFocus()
+
+    const fieldBox = field.closest('[class*="radius-md"]')
+    expect(fieldBox).not.toBeNull()
+    expect(fieldBox).toHaveClass('border-danger', 'shadow-glow-accent')
   })
 })
 
