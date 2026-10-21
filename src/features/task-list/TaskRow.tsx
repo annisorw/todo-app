@@ -95,7 +95,7 @@ function ExpandableTitle({ task, query, titleId }: { task: Task; query: string; 
             event.stopPropagation()
             setExpanded((value) => !value)
           }}
-          className="self-start text-caption text-accent-text hover:underline"
+          className="flex min-h-11 items-center self-start text-caption text-accent-text hover:underline sm:min-h-0"
         >
           {expanded ? 'Свернуть' : 'Показать целиком'}
         </button>

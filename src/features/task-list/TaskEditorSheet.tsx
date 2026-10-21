@@ -168,10 +168,10 @@ export function TaskEditorSheet({ task, onSave, onCancel }: TaskEditorSheetProps
 
         <div className="flex flex-col">
           <EditorFieldRow label="Приоритет">
-            <PrioritySelect value={form.priority} onChange={form.setPriority} />
+            <PrioritySelect value={form.priority} onChange={form.setPriority} align="end" />
           </EditorFieldRow>
           <EditorFieldRow label="Срок">
-            <DueDatePicker value={form.dueDate} onChange={form.setDueDate} />
+            <DueDatePicker value={form.dueDate} onChange={form.setDueDate} align="end" />
           </EditorFieldRow>
         </div>
 

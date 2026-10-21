@@ -74,4 +74,35 @@ describe('DueDatePicker', () => {
 
     expect(screen.queryByRole('button', { name: 'Убрать срок' })).not.toBeInTheDocument()
   })
+
+  it('hangs the panel from the left edge by default', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('button', { name: 'Срок' }))
+
+    const panel = screen.getByRole('button', { name: 'Убрать срок' }).closest('.absolute')
+    expect(panel).toHaveClass('left-0')
+    expect(panel).not.toHaveClass('right-0')
+  })
+
+  it('hangs the panel from the right edge when align="end" (FELA-124)', async () => {
+    const user = userEvent.setup()
+    function EndHarness() {
+      const [value, setValue] = useState<string | null>(null)
+      return (
+        <>
+          <DueDatePicker value={value} onChange={setValue} align="end" />
+          <LiveRegion />
+        </>
+      )
+    }
+    render(<EndHarness />)
+
+    await user.click(screen.getByRole('button', { name: 'Срок' }))
+
+    const panel = screen.getByRole('button', { name: 'Убрать срок' }).closest('.absolute')
+    expect(panel).toHaveClass('right-0')
+    expect(panel).not.toHaveClass('left-0')
+  })
 })
