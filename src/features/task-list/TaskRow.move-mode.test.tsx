@@ -268,6 +268,9 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
       for (const token of BUTTON_VARIANT_CLASSES.ghost.split(' ')) {
         expect(cancel.className).toContain(token)
       }
+      // `secondary` is a superset of `ghost` (adds a border) — the loop above
+      // alone can't tell the two variants apart, so rule the border out.
+      expect(cancel.className).not.toContain('border-surface-border-strong')
     })
   })
 
