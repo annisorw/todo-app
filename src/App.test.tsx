@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { ThemeProvider } from './state/ThemeProvider'
@@ -31,7 +32,6 @@ describe('App', () => {
   })
 
   it('wires Composer, Toolbar and TaskList together — adding a task shows it in the list', async () => {
-    const { default: userEvent } = await import('@testing-library/user-event')
     const user = userEvent.setup()
 
     render(
@@ -67,7 +67,6 @@ describe('App', () => {
 
   it('first run: "Добавить первую задачу" puts focus in the composer field (desktop)', async () => {
     stubMatchMedia(true)
-    const { default: userEvent } = await import('@testing-library/user-event')
     const user = userEvent.setup()
 
     render(

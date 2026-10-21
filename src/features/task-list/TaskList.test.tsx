@@ -930,6 +930,40 @@ describe('TaskList', () => {
       expect(onSearchAll).toHaveBeenCalledOnce()
     })
 
+    it('shows EmptyState no-active with no query, filter "Все", all tasks completed (FELA-165 scenario A)', () => {
+      stubMatchMedia(false)
+      renderTaskList(
+        [makeTask({ id: 't1', title: 'Купить молоко', completedAt: '2026-01-01T00:00:00.000Z' })],
+        { filter: 'all', query: '' },
+      )
+
+      expect(screen.getByText('Все активные задачи выполнены')).toBeInTheDocument()
+    })
+
+    it('shows EmptyState no-active-matches, not no-active, when a search matches only a completed task while active tasks remain (FELA-165)', async () => {
+      const user = userEvent.setup()
+      const onClearSearch = vi.fn()
+      stubMatchMedia(false)
+      renderTaskList(
+        [
+          makeTask({ id: 't1', title: 'Купить молоко', completedAt: '2026-01-01T00:00:00.000Z' }),
+          makeTask({ id: 't2', title: 'Позвонить в банк' }),
+          makeTask({ id: 't3', title: 'Отправить отчёт' }),
+        ],
+        { filter: 'all', query: 'молоко', onClearSearch },
+      )
+
+      expect(screen.queryByText('Все активные задачи выполнены')).not.toBeInTheDocument()
+      expect(screen.getByText('По запросу «молоко» нет активных задач')).toBeInTheDocument()
+      expect(screen.getByText('Совпадения есть только в «Готовые» — они ниже.')).toBeInTheDocument()
+      // Title is split by the <mark> highlight, so match on the row's
+      // checkbox label instead (same pattern as the search-highlighting tests).
+      expect(screen.getByRole('checkbox', { name: 'Купить молоко' })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Очистить поиск' }))
+      expect(onClearSearch).toHaveBeenCalledOnce()
+    })
+
     it('hides "Искать во всех" and clears the search via "Очистить поиск" when the filter is already "Все"', async () => {
       const user = userEvent.setup()
       const onClearSearch = vi.fn()

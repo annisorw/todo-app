@@ -5,6 +5,7 @@ export type EmptyStateProps =
   | { variant: 'first-run'; onAddTask: () => void }
   | { variant: 'no-active' }
   | { variant: 'no-completed' }
+  | { variant: 'no-active-matches'; query: string; onClearSearch: () => void }
   | {
       variant: 'no-search-results'
       query: string
@@ -112,6 +113,12 @@ function getCopy(props: EmptyStateProps): Copy {
         title: 'Пока нет выполненных задач',
         body: 'Отметьте что-то сделанным — оно появится здесь.',
       }
+    case 'no-active-matches':
+      return {
+        icon: <NoResultsIcon />,
+        title: `По запросу «${props.query}» нет активных задач`,
+        body: 'Совпадения есть только в «Готовые» — они ниже.',
+      }
     case 'no-search-results':
       return {
         icon: <NoResultsIcon />,
@@ -125,7 +132,7 @@ function getCopy(props: EmptyStateProps): Copy {
 }
 
 /**
- * design-spec 3.18 / S2 / S4 / S5. Four variants, each a static 88px art
+ * design-spec 3.18 / S2 / S4 / S5. Five variants, each a static 88px art
  * circle + `text-h2` title + `text-body` text (capped at 30 characters per
  * line) + 0–2 actions. `first-run` additionally gets the `N` / `/` / `?`
  * hint row (spec 3.18).
@@ -162,6 +169,12 @@ export function EmptyState(props: EmptyStateProps) {
             ))}
           </ul>
         </>
+      )}
+
+      {props.variant === 'no-active-matches' && (
+        <Button variant="secondary" size="sm" onClick={props.onClearSearch}>
+          Очистить поиск
+        </Button>
       )}
 
       {props.variant === 'no-search-results' && (

@@ -212,6 +212,12 @@ export function TaskList({
     moveTask: reorder.moveRow,
   })
 
+  // Separate from the "both empty" case below: a search (or just a cleared
+  // active list) can leave the active section empty while `displayCompleted`
+  // still has matches — `filter === 'completed'` is excluded because there
+  // the active section never applies and must stay silent, not show this.
+  const activeSectionEmpty = filter !== 'completed' && displayActive.length === 0
+
   return (
     <div id={panelId} role="tabpanel" aria-labelledby={activeTabId}>
       {displayActive.length === 0 && displayCompleted.length === 0 ? (
@@ -225,6 +231,12 @@ export function TaskList({
           />
         ) : filter === 'completed' ? (
           <EmptyState variant="no-completed" />
+        ) : (
+          <EmptyState variant="no-active" />
+        )
+      ) : activeSectionEmpty ? (
+        query !== '' ? (
+          <EmptyState variant="no-active-matches" query={query} onClearSearch={onClearSearch} />
         ) : (
           <EmptyState variant="no-active" />
         )
