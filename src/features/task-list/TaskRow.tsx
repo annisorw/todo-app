@@ -449,16 +449,23 @@ function RowBody({
               tabIndex={tabIndex}
             />
           ) : (
-            <PriorityChip priority={task.priority} variant="static" />
+            task.priority !== 'none' && <PriorityChip priority={task.priority} variant="static" />
           )}
           {isDesktop ? (
-            <DueDatePicker
-              value={task.dueDate}
-              onChange={(dueDate) => onQuickChange({ dueDate })}
-              tabIndex={tabIndex}
-            />
+            <span
+              className={cn(
+                dueInfo.status === 'none' &&
+                  'opacity-0 transition-opacity duration-(--duration-fast) ease-standard group-hover:opacity-100 group-focus-within:opacity-100',
+              )}
+            >
+              <DueDatePicker
+                value={task.dueDate}
+                onChange={(dueDate) => onQuickChange({ dueDate })}
+                tabIndex={tabIndex}
+              />
+            </span>
           ) : (
-            <DueDateChip status={dueInfo.status} label={dueInfo.label} variant="static" />
+            dueInfo.status !== 'none' && <DueDateChip status={dueInfo.status} label={dueInfo.label} variant="static" />
           )}
         </div>
       </div>
