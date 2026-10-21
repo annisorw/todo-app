@@ -89,7 +89,6 @@ export function TaskList({
   const [settling, setSettling] = useState<Record<string, SettlingEntry>>({})
   const settleTimers = useRef<Record<string, number>>({})
   const [todayKey] = useState(() => toDateKey(new Date()))
-  const panelRef = useRef<HTMLDivElement>(null)
 
   // The store keeps one `lastRemoved` slot (architecture section 4), so an
   // undo toast must check it's still the removal it names before acting —
@@ -109,20 +108,6 @@ export function TaskList({
     },
     [],
   )
-
-  // `filter-switch` remounts the panel below (`key={filter}` on the
-  // `motion.div`), which drops focus to `<body>` out from under a row that
-  // stays visible across the switch (FELA-195, PR #79 review). Reading
-  // `document.activeElement` here — during render, before the remount
-  // commits — captures whether the soon-to-be-unmounted subtree still held
-  // focus; the effect below restores it to the roving group's active row
-  // once the new subtree (and its refs) has landed.
-  const prevFilterRef = useRef(filter)
-  const restoreFocusRef = useRef(false)
-  if (prevFilterRef.current !== filter) {
-    restoreFocusRef.current = panelRef.current?.contains(document.activeElement) ?? false
-    prevFilterRef.current = filter
-  }
 
   function handleToggle(task: Task) {
     const willBeDone = !isDone(task)
@@ -190,12 +175,6 @@ export function TaskList({
   // not a position in the order (see `useTaskReorder`'s `pinnedIds`).
   const reorder = useTaskReorder({ tasks, ids: activeIds, pinnedIds: settlingIds, moveTask })
 
-  useEffect(() => {
-    if (!restoreFocusRef.current) return
-    restoreFocusRef.current = false
-    roving.focusActive()
-  }, [filter, roving])
-
   // design-spec 3.11a `saving`: a failed write leaves the editor open with
   // its draft intact — the error is already visible through `ErrorBanner`
   // (FELA-127). Only a confirmed write closes it.
@@ -252,7 +231,7 @@ export function TaskList({
   })
 
   return (
-    <div id={panelId} role="tabpanel" aria-labelledby={activeTabId} ref={panelRef}>
+    <div id={panelId} role="tabpanel" aria-labelledby={activeTabId}>
       {/*
        * `filter-switch` (motion table, section 5 / FELA-134): remounting on
        * `filter` alone — not `query` — crossfades the whole panel 140ms on a
@@ -262,9 +241,10 @@ export function TaskList({
        * list) while the new one fades in from 0; nested `AnimatePresence`
        * instances remount with it and their own `initial={false}` keeps
        * real adds/deletes on their own durations untouched. The remount
-       * drops DOM focus to `<body>` even when a row stays visible across the
-       * switch — the effect above restores it to the roving group's active
-       * row (FELA-195).
+       * would otherwise drop DOM focus to `<body>` even when a row stays
+       * visible across the switch — `useRovingFocus.registerRef` hands
+       * focus from the old node to the new one for the same row id before
+       * that can happen (FELA-195).
        */}
       <motion.div
         key={filter}

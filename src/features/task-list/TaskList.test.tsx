@@ -1059,6 +1059,28 @@ describe('TaskList', () => {
       expect((row as HTMLElement).style.opacity).not.toBe('0')
     })
 
+    it('keeps focus on a row that stays visible across a filter switch (FELA-195)', () => {
+      const { rerender } = renderTaskList(
+        [
+          makeTask({ id: 't1', title: 'Активная' }),
+          makeTask({ id: 't2', title: 'Готовая', completedAt: '2026-10-20T10:00:00.000Z' }),
+        ],
+        { filter: 'all' },
+      )
+
+      const checkbox = screen.getByRole('checkbox', { name: 'Активная' })
+      checkbox.focus()
+      expect(checkbox).toHaveFocus()
+
+      // 't1' stays visible under 'active' too — the row must keep (real DOM)
+      // focus, not drop it to <body>, even though the `key={filter}` switch
+      // below remounts and recreates its DOM node.
+      rerenderWithFilter(rerender, 'active')
+
+      expect(document.activeElement).not.toBe(document.body)
+      expect(screen.getByRole('checkbox', { name: 'Активная' })).toHaveFocus()
+    })
+
     it('does not break roving focus or tab/tabpanel wiring across a quick filter switch', () => {
       const { rerender } = renderTaskList(
         [
