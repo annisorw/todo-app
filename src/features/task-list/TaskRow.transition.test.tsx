@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import { createElement } from 'react'
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTask } from '../../test/factories'
 import { stubMatchMedia } from '../../test/matchMedia'
@@ -86,5 +86,56 @@ describe('TaskRow motion table (section 5): task-add vs task-delete timing', () 
     expect(props).toBeDefined()
     expect(props!.exit).toEqual({ opacity: 0 })
     expect(props!.transition).toEqual({ duration: 0.12 })
+  })
+})
+
+describe('TaskRow motion table (section 5): task-check strikethrough', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function strikeOverlay(container: HTMLElement) {
+    return container.querySelector<HTMLElement>('[aria-hidden="true"].line-through')
+  }
+
+  it('reveals the strikethrough over 240ms / --ease-spring once the task is done', () => {
+    stubMatchMedia(false)
+    const { container } = renderRow({
+      task: makeTask({ id: 't1', title: 'Купить молоко', completedAt: '2026-10-21T10:00:00.000Z' }),
+    })
+
+    const overlay = strikeOverlay(container)
+    expect(overlay).not.toBeNull()
+    expect(overlay!.style.clipPath).toBe('inset(0 0 0 0)')
+    expect(overlay!.style.transition).toBe('clip-path 240ms var(--ease-spring)')
+  })
+
+  it('keeps the strikethrough fully clipped while the task is active', () => {
+    stubMatchMedia(false)
+    const { container } = renderRow({
+      task: makeTask({ id: 't1', title: 'Купить молоко', completedAt: null }),
+    })
+
+    const overlay = strikeOverlay(container)
+    expect(overlay!.style.clipPath).toBe('inset(0 100% 0 0)')
+  })
+
+  it('swaps the strikethrough instantly under prefers-reduced-motion', () => {
+    stubMatchMedia(true)
+    const { container } = renderRow({
+      task: makeTask({ id: 't1', title: 'Купить молоко', completedAt: '2026-10-21T10:00:00.000Z' }),
+    })
+
+    const overlay = strikeOverlay(container)
+    expect(overlay!.style.transition).toBe('none')
+  })
+
+  it("doesn't duplicate the title text (the overlay is decorative, aria-hidden)", () => {
+    stubMatchMedia(false)
+    renderRow({
+      task: makeTask({ id: 't1', title: 'Купить молоко', completedAt: '2026-10-21T10:00:00.000Z' }),
+    })
+
+    expect(screen.getByText('Купить молоко')).toBeInTheDocument()
   })
 })

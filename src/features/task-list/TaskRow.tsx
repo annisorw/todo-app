@@ -59,10 +59,21 @@ function MoreIcon() {
  * Overflow is measured, not guessed from character count: wrapping depends
  * on the row's real width.
  */
-function ExpandableTitle({ task, query, titleId }: { task: Task; query: string; titleId: string }) {
+function ExpandableTitle({
+  task,
+  query,
+  titleId,
+  prefersReducedMotion,
+}: {
+  task: Task
+  query: string
+  titleId: string
+  prefersReducedMotion: boolean
+}) {
   const [expanded, setExpanded] = useState(false)
   const [isOverflowing, setIsOverflowing] = useState(false)
   const textRef = useRef<HTMLParagraphElement>(null)
+  const done = isDone(task)
 
   useEffect(() => {
     function checkOverflow() {
@@ -77,17 +88,42 @@ function ExpandableTitle({ task, query, titleId }: { task: Task; query: string; 
 
   return (
     <div className="flex min-w-0 flex-col gap-(--space-1)">
-      <p
-        id={titleId}
-        ref={textRef}
-        className={cn(
-          'text-body break-words text-primary',
-          isDone(task) && 'text-tertiary line-through',
-          !expanded && 'line-clamp-3 sm:line-clamp-2',
-        )}
-      >
-        {highlight(task.title, query)}
-      </p>
+      <div className="relative">
+        <p
+          id={titleId}
+          ref={textRef}
+          className={cn(
+            'text-body break-words text-primary',
+            done && 'text-tertiary',
+            !expanded && 'line-clamp-3 sm:line-clamp-2',
+          )}
+        >
+          {highlight(task.title, query)}
+        </p>
+        {/* `task-check`'s third part (motion table, section 5): the
+         * strikethrough grows (0→100% of the title's own width) instead of
+         * the native `line-through` snapping on instantly. A duplicate,
+         * `line-through` overlay revealed via `clip-path` (interpolable,
+         * unlike a plain `width` here — animating `width` would reflow the
+         * overlay's own wrapped lines mid-transition instead of cleanly
+         * revealing them), stacked on the real text so it still strikes
+         * every wrapped line correctly, not just a single band. It's a
+         * sibling of `<p>`, not nested inside it: `textContent` reads
+         * through child elements, so a duplicate nested inside would double
+         * up `<p>`'s own text for anything asserting on it directly. */}
+        <span
+          aria-hidden="true"
+          style={{
+            clipPath: done ? 'inset(0 0 0 0)' : 'inset(0 100% 0 0)',
+            transition: prefersReducedMotion ? 'none' : 'clip-path 240ms var(--ease-spring)',
+          }}
+          className="pointer-events-none absolute inset-0 overflow-hidden line-through"
+        >
+          {Array.from(task.title).map((char, index) => (
+            <span key={index}>{char}</span>
+          ))}
+        </span>
+      </div>
       {(isOverflowing || expanded) && (
         <button
           type="button"
@@ -253,6 +289,7 @@ export function TaskRow({
               isOverdue={isOverdue}
               isDesktop={isDesktop}
               done={done}
+              prefersReducedMotion={prefersReducedMotion}
               tabIndex={tabIndex}
               titleId={titleId}
               priorityMetaId={priorityMetaId}
@@ -310,6 +347,7 @@ export function TaskRow({
         isOverdue={isOverdue}
         isDesktop={isDesktop}
         done={done}
+        prefersReducedMotion={prefersReducedMotion}
         tabIndex={tabIndex}
         titleId={titleId}
         priorityMetaId={priorityMetaId}
@@ -346,6 +384,7 @@ interface RowBodyProps {
   isOverdue: boolean
   isDesktop: boolean
   done: boolean
+  prefersReducedMotion: boolean
   tabIndex: 0 | -1
   titleId: string
   priorityMetaId: string
@@ -375,6 +414,7 @@ function RowBody({
   isOverdue,
   isDesktop,
   done,
+  prefersReducedMotion,
   tabIndex,
   titleId,
   priorityMetaId,
@@ -431,7 +471,7 @@ function RowBody({
       />
 
       <div className="min-w-0 flex-1">
-        <ExpandableTitle task={task} query={query} titleId={titleId} />
+        <ExpandableTitle task={task} query={query} titleId={titleId} prefersReducedMotion={prefersReducedMotion} />
 
         <div className="mt-(--space-1) flex flex-wrap items-center gap-(--space-2)">
           {isDesktop ? (

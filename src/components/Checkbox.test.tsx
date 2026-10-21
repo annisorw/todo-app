@@ -1,10 +1,16 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { stubMatchMedia } from '../test/matchMedia'
 import { Checkbox } from './Checkbox'
 
 describe('Checkbox', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('takes its accessible name from the label prop, not visible text', () => {
+    stubMatchMedia(false)
     render(<Checkbox checked={false} label="Buy milk" onChange={() => {}} />)
 
     const checkbox = screen.getByRole('checkbox', { name: 'Buy milk' })
@@ -13,11 +19,13 @@ describe('Checkbox', () => {
   })
 
   it('reflects the checked state', () => {
+    stubMatchMedia(false)
     render(<Checkbox checked label="Buy milk" onChange={() => {}} />)
     expect(screen.getByRole('checkbox', { name: 'Buy milk' })).toBeChecked()
   })
 
   it('focuses from the keyboard and toggles with Space', async () => {
+    stubMatchMedia(false)
     const user = userEvent.setup()
     const onChange = vi.fn()
     render(<Checkbox checked={false} label="Buy milk" onChange={onChange} />)
@@ -32,6 +40,7 @@ describe('Checkbox', () => {
   })
 
   it('is disabled and not interactive when disabled', async () => {
+    stubMatchMedia(false)
     const user = userEvent.setup()
     const onChange = vi.fn()
     render(<Checkbox checked={false} label="Buy milk" onChange={onChange} disabled />)
@@ -41,5 +50,45 @@ describe('Checkbox', () => {
 
     await user.click(checkbox)
     expect(onChange).not.toHaveBeenCalled()
+  })
+
+  describe('task-check (motion table, section 5)', () => {
+    function fillAndStroke(container: HTMLElement) {
+      const [fill, stroke] = container.querySelectorAll<HTMLElement>('[style*="transition"]')
+      return { fill: fill!, stroke: stroke! }
+    }
+
+    it('runs the fill scale and checkmark draw at 240ms / --ease-spring when checked', () => {
+      stubMatchMedia(false)
+      const { container } = render(<Checkbox checked label="Buy milk" onChange={() => {}} />)
+
+      const { fill, stroke } = fillAndStroke(container)
+      expect(fill.style.transition).toContain('240ms var(--ease-spring)')
+      expect(fill.style.opacity).toBe('1')
+      expect(fill.style.transform).toBe('scale(1)')
+      expect(stroke.style.transition).toContain('240ms var(--ease-spring)')
+      expect(stroke.style.strokeDashoffset).toBe('0')
+    })
+
+    it('rests with the fill hidden and the checkmark undrawn when unchecked', () => {
+      stubMatchMedia(false)
+      const { container } = render(<Checkbox checked={false} label="Buy milk" onChange={() => {}} />)
+
+      const { fill, stroke } = fillAndStroke(container)
+      expect(fill.style.opacity).toBe('0')
+      expect(fill.style.transform).toBe('scale(0.8)')
+      expect(stroke.style.strokeDashoffset).not.toBe('0')
+    })
+
+    it('swaps state instantly under prefers-reduced-motion, with no transition', () => {
+      stubMatchMedia(true)
+      const { container } = render(<Checkbox checked label="Buy milk" onChange={() => {}} />)
+
+      const { fill, stroke } = fillAndStroke(container)
+      expect(fill.style.transition).toBe('none')
+      expect(stroke.style.transition).toBe('none')
+      expect(fill.style.opacity).toBe('1')
+      expect(stroke.style.strokeDashoffset).toBe('0')
+    })
   })
 })
