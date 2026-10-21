@@ -40,6 +40,9 @@ interface TimerEntry {
   timeoutId: number | null
   remainingMs: number
   startedAt: number
+  /** Independent pause reasons — resuming requires both to clear (FELA-128). */
+  hovered: boolean
+  focused: boolean
 }
 
 /**
@@ -78,28 +81,46 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const armTimer = useCallback(
     (id: string, remainingMs: number) => {
       const timeoutId = window.setTimeout(() => startClosing(id), remainingMs)
-      timers.current.set(id, { timeoutId, remainingMs, startedAt: Date.now() })
+      const previous = timers.current.get(id)
+      timers.current.set(id, {
+        timeoutId,
+        remainingMs,
+        startedAt: Date.now(),
+        hovered: previous?.hovered ?? false,
+        focused: previous?.focused ?? false,
+      })
     },
     [startClosing],
   )
 
-  const pauseTimer = useCallback((id: string) => {
-    const entry = timers.current.get(id)
-    if (entry === undefined || entry.timeoutId === null) return
-    window.clearTimeout(entry.timeoutId)
-    const elapsed = Date.now() - entry.startedAt
-    timers.current.set(id, {
-      timeoutId: null,
-      remainingMs: Math.max(0, entry.remainingMs - elapsed),
-      startedAt: entry.startedAt,
-    })
-  }, [])
-
-  const resumeTimer = useCallback(
-    (id: string) => {
+  /**
+   * Hover and focus are independent pause reasons: setting one true always
+   * pauses, and resuming fires only once both are false again (FELA-128 —
+   * mouseleave used to resume unconditionally even while focus held the
+   * timer paused).
+   */
+  const setPauseReason = useCallback(
+    (id: string, reason: 'hovered' | 'focused', active: boolean) => {
       const entry = timers.current.get(id)
-      if (entry === undefined || entry.timeoutId !== null) return
-      armTimer(id, entry.remainingMs)
+      if (entry === undefined) return
+      const updated: TimerEntry = { ...entry, [reason]: active }
+      const shouldPause = updated.hovered || updated.focused
+
+      if (shouldPause) {
+        if (updated.timeoutId !== null) {
+          window.clearTimeout(updated.timeoutId)
+          const elapsed = Date.now() - updated.startedAt
+          updated.remainingMs = Math.max(0, updated.remainingMs - elapsed)
+          updated.timeoutId = null
+        }
+        timers.current.set(id, updated)
+        return
+      }
+
+      timers.current.set(id, updated)
+      if (updated.timeoutId === null) {
+        armTimer(id, updated.remainingMs)
+      }
     },
     [armTimer],
   )
@@ -155,10 +176,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             actionLabel={toast.actionLabel}
             onAction={toast.onAction}
             closing={toast.closing}
-            onMouseEnter={() => pauseTimer(toast.id)}
-            onMouseLeave={() => resumeTimer(toast.id)}
-            onFocus={() => pauseTimer(toast.id)}
-            onBlur={() => resumeTimer(toast.id)}
+            onMouseEnter={() => setPauseReason(toast.id, 'hovered', true)}
+            onMouseLeave={() => setPauseReason(toast.id, 'hovered', false)}
+            onFocus={() => setPauseReason(toast.id, 'focused', true)}
+            onBlur={(event) => {
+              // Focus moving to another element inside the same toast is not
+              // a focus-out: don't let it release the "focused" pause reason.
+              if (event.currentTarget.contains(event.relatedTarget)) return
+              setPauseReason(toast.id, 'focused', false)
+            }}
           />
         ))}
       </div>

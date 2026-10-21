@@ -27,13 +27,16 @@ describe('ThemeToggle', () => {
 
     const dark = screen.getByRole('button', { name: 'Тёмная тема' })
     expect(dark).not.toHaveAttribute('aria-pressed')
+    expect(dark).toHaveAttribute('title', 'Тёмная тема')
 
     await user.click(dark)
 
-    expect(screen.getByRole('button', { name: 'Светлая тема' })).toBeInTheDocument()
+    const light = screen.getByRole('button', { name: 'Светлая тема' })
+    expect(light).toBeInTheDocument()
+    expect(light).toHaveAttribute('title', 'Светлая тема')
     expect(screen.getByRole('status')).toHaveTextContent('Тема: светлая')
 
-    await user.click(screen.getByRole('button', { name: 'Светлая тема' }))
+    await user.click(light)
 
     expect(screen.getByRole('button', { name: 'Тёмная тема' })).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('Тема: тёмная')
