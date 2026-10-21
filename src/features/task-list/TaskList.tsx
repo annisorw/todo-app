@@ -1,12 +1,10 @@
 import { AnimatePresence, Reorder } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
 import { EmptyState } from '../../components/EmptyState'
 import { toDateKey } from '../../domain/dueDate'
 import type { Filter, TaskView } from '../../domain/filters'
 import { isDone } from '../../domain/task'
 import type { Task, TaskPatch } from '../../domain/task'
-import { announce } from '../../lib/announce'
 import { useRowShortcuts } from '../shortcuts/useRowShortcuts'
 import { useToast } from '../../state/useToast'
 import { useTaskStore } from '../../state/useTaskStore'
@@ -264,14 +262,12 @@ export function TaskList({
                   value: task.id,
                   isMovable: !isDone(task),
                   isGrabbed: reorder.grabbedId === task.id,
-                  onHandleKeyDown: (event) => {
-                    reorder.handleHandleKeyDown(event, task.id)
-                    // Same two-step order the bubble to `useRowShortcuts`
-                    // will have after FELA-20: the grab mode gets the key
-                    // first and marks it handled; this only sees what it
-                    // left alone.
-                    handleCtrlArrow(event, task)
-                  },
+                  // Grab mode gets the key first and `preventDefault`s what it
+                  // uses; whatever it leaves alone bubbles on to the row's
+                  // `useRowShortcuts`, which skips an already handled event.
+                  // So `Ctrl/Cmd+↑`/`↓` works from the handle too, and a held
+                  // row's plain `↑`/`↓` never reaches the roving focus move.
+                  onHandleKeyDown: (event) => reorder.handleHandleKeyDown(event, task.id),
                   onHandleBlur: () => reorder.handleHandleBlur(task.id),
                   onDragStart: () => reorder.handleDragStart(task.id),
                   onDragEnd: reorder.handleDragEnd,
