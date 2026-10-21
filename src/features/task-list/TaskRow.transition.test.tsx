@@ -10,24 +10,28 @@ const capturedLiProps: Array<Record<string, unknown>> = []
 
 vi.mock('framer-motion', async (importOriginal) => {
   const actual = await importOriginal<typeof import('framer-motion')>()
+  const captureLi = (props: Record<string, unknown>) => {
+    capturedLiProps.push(props)
+    const {
+      children,
+      exit: _exit,
+      initial: _initial,
+      animate: _animate,
+      transition: _transition,
+      layout: _layout,
+      ...rest
+    } = props
+    return createElement(actual.motion.li, rest as never, children as never)
+  }
   return {
     ...actual,
-    motion: {
-      ...actual.motion,
-      li: (props: Record<string, unknown>) => {
-        capturedLiProps.push(props)
-        const {
-          children,
-          exit: _exit,
-          initial: _initial,
-          animate: _animate,
-          transition: _transition,
-          layout: _layout,
-          ...rest
-        } = props
-        return createElement(actual.motion.li, rest as never, children as never)
-      },
-    },
+    // `motion` is a Proxy that mints a component per tag on first access, so
+    // spreading it hands back an empty object and every other `motion.*` in
+    // the tree (`RowBody`'s own div) renders as `undefined`. Intercept `li`
+    // and forward everything else to the real proxy.
+    motion: new Proxy(actual.motion, {
+      get: (target, key, receiver) => (key === 'li' ? captureLi : Reflect.get(target, key, receiver)),
+    }),
   }
 })
 
