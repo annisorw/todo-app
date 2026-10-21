@@ -98,6 +98,7 @@ describe('Checkbox', () => {
     // a real `:focus-visible` match with zero visible effect. The decorative circle has to
     // carry its own `peer-focus-visible` ring instead (Chromium-verified, see PR description);
     // this test just guards that the classes implementing it aren't quietly dropped again.
+    stubMatchMedia(false)
     render(<Checkbox checked={false} label="Buy milk" onChange={() => {}} />)
 
     const checkbox = screen.getByRole('checkbox', { name: 'Buy milk' })

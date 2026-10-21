@@ -1,7 +1,7 @@
 import { Reorder, motion, useDragControls, useMotionValue, useTransform } from 'framer-motion'
 import type { DragControls } from 'framer-motion'
-import { useEffect, useId, useRef, useState } from 'react'
-import type { KeyboardEvent, PointerEvent, RefObject, TouchEvent } from 'react'
+import { isValidElement, useEffect, useId, useRef, useState } from 'react'
+import type { KeyboardEvent, PointerEvent, RefObject, ReactNode, TouchEvent } from 'react'
 import { Checkbox } from '../../components/Checkbox'
 import { DragHandle } from '../../components/DragHandle'
 import { DueDateChip } from '../../components/DueDateChip'
@@ -109,6 +109,29 @@ function MoreIcon() {
 }
 
 /**
+ * Mirrors `highlight()`'s output for the strikethrough overlay, but with
+ * every character in its own `<span>` (and a `<mark>` run still wrapped in
+ * a real `<mark>`, just with split children) so no single element in this
+ * `aria-hidden` layer ever carries the plain title as one text node — that
+ * is what keeps `getByText`/a real `Ctrl+F` from treating this layer and
+ * the real `<p>` as two independent matches of the same string. A `<mark>`
+ * is still a real `<mark>` so the base.css rule pinning its `color` (spec
+ * 3.11 / 3.25) covers this layer too, not just the real text underneath.
+ */
+function splitForOverlay(node: ReactNode, keyPrefix = ''): ReactNode {
+  if (typeof node === 'string') {
+    return Array.from(node).map((char, index) => <span key={`${keyPrefix}${index}`}>{char}</span>)
+  }
+  if (Array.isArray(node)) {
+    return node.map((part, index) => splitForOverlay(part, `${keyPrefix}${index}-`))
+  }
+  if (isValidElement<{ children?: ReactNode }>(node) && node.type === 'mark') {
+    return <mark key={`${keyPrefix}mark`}>{splitForOverlay(node.props.children, `${keyPrefix}m-`)}</mark>
+  }
+  return node
+}
+
+/**
  * design-spec S10 / acceptance criterion 14 — clamps to 2 lines (3 on
  * mobile) and only offers "Показать целиком" when the text actually
  * overflows that clamp (a short title never gets a pointless chip).
@@ -171,14 +194,15 @@ function ExpandableTitle({
          * color always matches the real text's — one `done` check, two
          * layers, never drifting apart. `select-none` keeps it out of mouse
          * selection / copy, which would otherwise duplicate the title.
-         * Rendered through `highlight()`, same as the real `<p>`: a plain
-         * `task.title` here would paint this layer's own `text-tertiary`
-         * glyphs directly over the real `<mark>` underneath, hiding the
-         * pinned `color: var(--color-text-primary)` base.css gives it for
-         * contrast on a completed row (spec 3.11/§7) — the overlay needs its
-         * own `<mark>` so that rule applies to this layer too. `break-words`
-         * matches the `<p>`'s own wrapping so one unbroken long word doesn't
-         * run past this layer while the real text below it wraps. */}
+         * Run through `splitForOverlay(highlight(...))`, not a plain
+         * `task.title`: a bare string here would paint this layer's own
+         * `text-tertiary` glyphs directly over the real `<mark>` underneath,
+         * hiding the pinned `color: var(--color-text-primary)` base.css
+         * gives it for contrast on a completed row (spec 3.11/§7) — the
+         * overlay needs its own `<mark>` so that rule applies to this layer
+         * too. `break-words` matches the `<p>`'s own wrapping so one
+         * unbroken long word doesn't run past this layer while the real
+         * text below it wraps. */}
         <span
           aria-hidden="true"
           style={{
@@ -190,7 +214,7 @@ function ExpandableTitle({
             done && 'text-tertiary',
           )}
         >
-          {highlight(task.title, query)}
+          {splitForOverlay(highlight(task.title, query))}
         </span>
       </div>
       {(isOverflowing || expanded) && (
