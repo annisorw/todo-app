@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { KeyboardEvent } from 'react'
+import { announce } from '../../lib/announce'
 import { MAX_TITLE_LENGTH, TITLE_COUNTER_THRESHOLD } from '../../domain/limits'
 import type { Priority, Task, TaskPatch } from '../../domain/task'
 
@@ -49,15 +50,19 @@ export function useTaskEditorForm({ task, onSave, onCancel }: UseTaskEditorFormO
 
     const trimmed = title.trim()
     if (trimmed.length === 0) {
-      onCancel()
+      // Empty text is a cancel, not a delete (design-spec 3.11a) — routed
+      // through `handleCancel` so the two paths share one announcement.
+      handleCancel()
       return
     }
 
     onSave({ title: trimmed, priority, dueDate })
+    announce(`Изменения сохранены: «${trimmed}»`)
   }
 
   function handleCancel() {
     onCancel()
+    announce('Правка отменена')
   }
 
   function handleTextareaKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {

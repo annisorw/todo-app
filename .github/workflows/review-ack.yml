@@ -9,12 +9,21 @@ name: review-ack
 # convention) does not count. This is a visibility gate, not an identity
 # gate: every agent pushes under one GitHub account, so it cannot tell PR
 # author from reviewer. See FELA-41 for that tradeoff.
+#
+# `merge_group` (FELA-166): branch protection requires this context on the
+# merge queue's temporary commit too, but that commit never gets its own
+# `/merge-ok` comment — the ack was already given on the PR branch before the
+# PR was allowed into the queue (GitHub only queues a PR once its required
+# checks, review-ack included, are green on the PR branch). The
+# `merge-group-ack` job below carries that already-given ack forward onto the
+# queue commit so the required check reports instead of timing out.
 
 on:
   pull_request:
     types: [opened, reopened, synchronize]
   issue_comment:
     types: [created]
+  merge_group:
 
 permissions:
   contents: read
@@ -118,6 +127,47 @@ jobs:
                 summary:
                   `Подтверждено комментарием @${context.payload.comment.user.login} ` +
                   `на ${headSha}: ${context.payload.comment.html_url}`,
+              },
+            };
+
+            if (existing.check_runs.length > 0) {
+              await github.rest.checks.update({ check_run_id: existing.check_runs[0].id, ...params });
+            } else {
+              await github.rest.checks.create(params);
+            }
+
+  merge-group-ack:
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      checks: write
+    steps:
+      - name: Carry the PR-branch ack forward onto the merge group commit
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const headSha = context.sha;
+            const { data: existing } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: headSha,
+              check_name: 'review-ack',
+            });
+
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'review-ack',
+              head_sha: headSha,
+              status: 'completed',
+              conclusion: 'success',
+              output: {
+                title: 'Отметка ревьюера перенесена из ветки PR',
+                summary:
+                  'Эта проверка на коммите очереди слияния автоматическая: ' +
+                  'PR допускается в merge queue только если review-ack уже ' +
+                  'зелёный на ветке PR, так что отдельный /merge-ok здесь не нужен.',
               },
             };
 
