@@ -393,17 +393,14 @@ export function TaskRow({
   // while *any* of them is open — measured with `elementFromPoint` in the
   // overlap, not reasoned about. `--z-content` and not `--z-dropdown`: the
   // row must stay below the sticky toolbar (2.9).
-  const popupOpen = menuOpen || priorityOpen || dueDateOpen
-
-  // The chips unmount when the desktop editor replaces the row body, or when
-  // the viewport drops to the mobile static chips, and an unmount is not a
-  // close — without this the row would stay raised with nothing open.
+  //
+  // The two chip flags are read only while the chips are actually mounted: an
+  // unmount (the desktop editor replacing the row body, or the viewport
+  // dropping to the mobile static chips) is not a close, and the row must not
+  // stay raised with nothing open. Derived here rather than reset in an
+  // effect, which would be a render cascade for a value render can compute.
   const chipsMounted = isDesktop && !isEditing
-  useEffect(() => {
-    if (chipsMounted) return
-    setPriorityOpen(false)
-    setDueDateOpen(false)
-  }, [chipsMounted])
+  const popupOpen = menuOpen || (chipsMounted && (priorityOpen || dueDateOpen))
 
   const shellClassName = isEditing && isDesktop ? undefined : cn('relative', popupOpen && 'z-(--z-content)')
 
