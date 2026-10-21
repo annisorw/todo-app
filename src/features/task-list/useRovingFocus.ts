@@ -21,6 +21,13 @@ export interface RovingFocus {
    * be empty, and there is nothing in it left to focus.
    */
   focusNeighbourOf: (id: string) => void
+  /**
+   * Moves real DOM focus onto the group's current active row — for a caller
+   * that dropped focus to `<body>` out from under this group (a remount
+   * elsewhere, e.g. `TaskList`'s filter-switch crossfade) and wants it back
+   * without changing which row is active. A no-op when the group is empty.
+   */
+  focusActive: () => void
 }
 
 /**
@@ -102,6 +109,11 @@ export function useRovingFocus(ids: string[]): RovingFocus {
     [ids, focusRow],
   )
 
+  const focusActive = useCallback(() => {
+    if (effectiveActiveId === null) return
+    nodes.current.get(effectiveActiveId)?.focus()
+  }, [effectiveActiveId])
+
   return {
     activeId: effectiveActiveId,
     getTabIndex,
@@ -109,5 +121,6 @@ export function useRovingFocus(ids: string[]): RovingFocus {
     handleFocus,
     handleKeyDown,
     focusNeighbourOf,
+    focusActive,
   }
 }

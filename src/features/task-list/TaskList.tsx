@@ -1,10 +1,11 @@
-import { AnimatePresence, Reorder } from 'framer-motion'
+import { AnimatePresence, Reorder, motion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 import { EmptyState } from '../../components/EmptyState'
 import { toDateKey } from '../../domain/dueDate'
 import type { Filter, TaskView } from '../../domain/filters'
 import { isDone } from '../../domain/task'
 import type { Task, TaskPatch } from '../../domain/task'
+import { useMediaQuery } from '../../lib/useMediaQuery'
 import { useRowShortcuts } from '../shortcuts/useRowShortcuts'
 import { useToast } from '../../state/useToast'
 import { useTaskStore } from '../../state/useTaskStore'
@@ -83,10 +84,12 @@ export function TaskList({
     lastRemoved,
   } = useTaskStore()
   const { pushToast } = useToast()
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [settling, setSettling] = useState<Record<string, SettlingEntry>>({})
   const settleTimers = useRef<Record<string, number>>({})
   const [todayKey] = useState(() => toDateKey(new Date()))
+  const panelRef = useRef<HTMLDivElement>(null)
 
   // The store keeps one `lastRemoved` slot (architecture section 4), so an
   // undo toast must check it's still the removal it names before acting —
@@ -106,6 +109,20 @@ export function TaskList({
     },
     [],
   )
+
+  // `filter-switch` remounts the panel below (`key={filter}` on the
+  // `motion.div`), which drops focus to `<body>` out from under a row that
+  // stays visible across the switch (FELA-195, PR #79 review). Reading
+  // `document.activeElement` here — during render, before the remount
+  // commits — captures whether the soon-to-be-unmounted subtree still held
+  // focus; the effect below restores it to the roving group's active row
+  // once the new subtree (and its refs) has landed.
+  const prevFilterRef = useRef(filter)
+  const restoreFocusRef = useRef(false)
+  if (prevFilterRef.current !== filter) {
+    restoreFocusRef.current = panelRef.current?.contains(document.activeElement) ?? false
+    prevFilterRef.current = filter
+  }
 
   function handleToggle(task: Task) {
     const willBeDone = !isDone(task)
@@ -173,6 +190,12 @@ export function TaskList({
   // not a position in the order (see `useTaskReorder`'s `pinnedIds`).
   const reorder = useTaskReorder({ tasks, ids: activeIds, pinnedIds: settlingIds, moveTask })
 
+  useEffect(() => {
+    if (!restoreFocusRef.current) return
+    restoreFocusRef.current = false
+    roving.focusActive()
+  }, [filter, roving])
+
   // design-spec 3.11a `saving`: a failed write leaves the editor open with
   // its draft intact — the error is already visible through `ErrorBanner`
   // (FELA-127). Only a confirmed write closes it.
@@ -229,97 +252,117 @@ export function TaskList({
   })
 
   return (
-    <div id={panelId} role="tabpanel" aria-labelledby={activeTabId}>
-      {displayActive.length === 0 && displayCompleted.length === 0 ? (
-        query !== '' ? (
-          <EmptyState
-            variant="no-search-results"
-            query={query}
-            activeFilterLabel={filter === 'all' ? undefined : FILTER_LABELS[filter]}
-            onClearSearch={onClearSearch}
-            onSearchAll={filter === 'all' ? undefined : onSearchAll}
-          />
-        ) : filter === 'completed' ? (
-          <EmptyState variant="no-completed" />
+    <div id={panelId} role="tabpanel" aria-labelledby={activeTabId} ref={panelRef}>
+      {/*
+       * `filter-switch` (motion table, section 5 / FELA-134): remounting on
+       * `filter` alone — not `query` — crossfades the whole panel 140ms on a
+       * segment change instead of letting the per-row `AnimatePresence`
+       * below mistake a filter switch for a batch of task-add/task-delete.
+       * The old subtree just disappears (no `exit`, so no stacked double
+       * list) while the new one fades in from 0; nested `AnimatePresence`
+       * instances remount with it and their own `initial={false}` keeps
+       * real adds/deletes on their own durations untouched. The remount
+       * drops DOM focus to `<body>` even when a row stays visible across the
+       * switch — the effect above restores it to the roving group's active
+       * row (FELA-195).
+       */}
+      <motion.div
+        key={filter}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: prefersReducedMotion ? 0 : 0.14, ease: [0.2, 0, 0, 1] }}
+      >
+        {displayActive.length === 0 && displayCompleted.length === 0 ? (
+          query !== '' ? (
+            <EmptyState
+              variant="no-search-results"
+              query={query}
+              activeFilterLabel={filter === 'all' ? undefined : FILTER_LABELS[filter]}
+              onClearSearch={onClearSearch}
+              onSearchAll={filter === 'all' ? undefined : onSearchAll}
+            />
+          ) : filter === 'completed' ? (
+            <EmptyState variant="no-completed" />
+          ) : (
+            <EmptyState variant="no-active" />
+          )
         ) : (
-          <EmptyState variant="no-active" />
-        )
-      ) : (
-        <Reorder.Group
-          as="ul"
-          axis="y"
-          values={activeIds}
-          onReorder={reorder.handleReorder}
-          aria-label="Задачи"
-          className="flex flex-col gap-(--space-1)"
-        >
-          <AnimatePresence initial={false}>
-            {displayActive.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                query={query}
-                todayKey={todayKey}
-                tabIndex={roving.getTabIndex(task.id)}
-                isEditing={editingId === task.id}
-                registerRef={(node) => roving.registerRef(task.id, node)}
-                onFocus={() => roving.handleFocus(task.id)}
-                onKeyDown={(event) => roving.handleKeyDown(event, task.id)}
-                onRowKeyDown={(event) =>
-                  handleRowKeyDown(event, task.id, () => roving.focusNeighbourOf(task.id))
-                }
-                onToggle={() => handleToggle(task)}
-                onOpenEditor={() => setEditingId(task.id)}
-                onCloseEditor={() => setEditingId(null)}
-                onSave={(patch) => handleSave(task.id, patch)}
-                onRemove={() => handleRemove(task)}
-                onQuickChange={(patch) => editTask(task.id, patch)}
-                reorder={{
-                  value: task.id,
-                  isMovable: !isDone(task),
-                  isGrabbed: reorder.grabbedId === task.id,
-                  // Grab mode gets the key first and `preventDefault`s what it
-                  // uses; whatever it leaves alone bubbles on to the row's
-                  // `useRowShortcuts`, which skips an already handled event.
-                  // So `Ctrl/Cmd+↑`/`↓` works from the handle too, and a held
-                  // row's plain `↑`/`↓` never reaches the roving focus move.
-                  onHandleKeyDown: (event) => reorder.handleHandleKeyDown(event, task.id),
-                  onHandleBlur: () => reorder.handleHandleBlur(task.id),
-                  onDragStart: () => reorder.handleDragStart(task.id),
-                  onDragEnd: reorder.handleDragEnd,
-                  // design-spec 6.4's intents, for the mobile move mode
-                  // ([FELA-177](/FELA/issues/FELA-177)). The same four the
-                  // handle's key decoder calls, so both modes write the order
-                  // and announce the step through one implementation.
-                  onGrab: () => reorder.grab(task.id),
-                  onStep: (delta) => reorder.step(task.id, delta),
-                  onDrop: () => reorder.drop(task.id),
-                  onCancel: () => reorder.cancel(task.id),
-                }}
-              />
-            ))}
-          </AnimatePresence>
-        </Reorder.Group>
-      )}
+          <Reorder.Group
+            as="ul"
+            axis="y"
+            values={activeIds}
+            onReorder={reorder.handleReorder}
+            aria-label="Задачи"
+            className="flex flex-col gap-(--space-1)"
+          >
+            <AnimatePresence initial={false}>
+              {displayActive.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  query={query}
+                  todayKey={todayKey}
+                  tabIndex={roving.getTabIndex(task.id)}
+                  isEditing={editingId === task.id}
+                  registerRef={(node) => roving.registerRef(task.id, node)}
+                  onFocus={() => roving.handleFocus(task.id)}
+                  onKeyDown={(event) => roving.handleKeyDown(event, task.id)}
+                  onRowKeyDown={(event) =>
+                    handleRowKeyDown(event, task.id, () => roving.focusNeighbourOf(task.id))
+                  }
+                  onToggle={() => handleToggle(task)}
+                  onOpenEditor={() => setEditingId(task.id)}
+                  onCloseEditor={() => setEditingId(null)}
+                  onSave={(patch) => handleSave(task.id, patch)}
+                  onRemove={() => handleRemove(task)}
+                  onQuickChange={(patch) => editTask(task.id, patch)}
+                  reorder={{
+                    value: task.id,
+                    isMovable: !isDone(task),
+                    isGrabbed: reorder.grabbedId === task.id,
+                    // Grab mode gets the key first and `preventDefault`s what it
+                    // uses; whatever it leaves alone bubbles on to the row's
+                    // `useRowShortcuts`, which skips an already handled event.
+                    // So `Ctrl/Cmd+↑`/`↓` works from the handle too, and a held
+                    // row's plain `↑`/`↓` never reaches the roving focus move.
+                    onHandleKeyDown: (event) => reorder.handleHandleKeyDown(event, task.id),
+                    onHandleBlur: () => reorder.handleHandleBlur(task.id),
+                    onDragStart: () => reorder.handleDragStart(task.id),
+                    onDragEnd: reorder.handleDragEnd,
+                    // design-spec 6.4's intents, for the mobile move mode
+                    // ([FELA-177](/FELA/issues/FELA-177)). The same four the
+                    // handle's key decoder calls, so both modes write the order
+                    // and announce the step through one implementation.
+                    onGrab: () => reorder.grab(task.id),
+                    onStep: (delta) => reorder.step(task.id, delta),
+                    onDrop: () => reorder.drop(task.id),
+                    onCancel: () => reorder.cancel(task.id),
+                  }}
+                />
+              ))}
+            </AnimatePresence>
+          </Reorder.Group>
+        )}
 
-      <CompletedSection
-        completed={displayCompleted}
-        totalCompletedCount={tasks.filter(isDone).length}
-        query={query}
-        todayKey={todayKey}
-        editingId={editingId}
-        onRowKeyDown={handleRowKeyDown}
-        onToggle={(id) => {
-          const task = displayCompleted.find((candidate) => candidate.id === id)
-          if (task) handleToggle(task)
-        }}
-        onOpenEditor={(id) => setEditingId(id)}
-        onCloseEditor={() => setEditingId(null)}
-        onSave={handleSave}
-        onRemove={handleRemove}
-        onQuickChange={(id, patch) => editTask(id, patch)}
-        onClearCompleted={clearCompleted}
-      />
+        <CompletedSection
+          completed={displayCompleted}
+          totalCompletedCount={tasks.filter(isDone).length}
+          query={query}
+          todayKey={todayKey}
+          editingId={editingId}
+          onRowKeyDown={handleRowKeyDown}
+          onToggle={(id) => {
+            const task = displayCompleted.find((candidate) => candidate.id === id)
+            if (task) handleToggle(task)
+          }}
+          onOpenEditor={(id) => setEditingId(id)}
+          onCloseEditor={() => setEditingId(null)}
+          onSave={handleSave}
+          onRemove={handleRemove}
+          onQuickChange={(id, patch) => editTask(id, patch)}
+          onClearCompleted={clearCompleted}
+        />
+      </motion.div>
     </div>
   )
 }
