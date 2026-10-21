@@ -1,10 +1,10 @@
 name: Deploy to GitHub Pages
 
-# Manual trigger only, on purpose. Publishing the demo is task FELA-25, owned by
-# DevOps and blocked by the QA run (FELA-22) so that an unverified build never
-# reaches a public URL. DevOps re-enables the push trigger in that task once QA
-# has signed off; until then the workflow is run on demand.
+# QA (FELA-22) has signed off, so the demo now redeploys on every push to main,
+# in addition to the manual trigger used while publishing was gated.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -45,6 +45,9 @@ jobs:
           fi
           if ls dist/assets/*.map >/dev/null 2>&1; then
             echo 'Source maps must not be published'; exit 1
+          fi
+          if ! grep -qi 'content-security-policy' dist/index.html; then
+            echo 'CSP meta tag missing from dist/index.html'; exit 1
           fi
 
       - name: Configure Pages
