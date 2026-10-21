@@ -23,7 +23,7 @@ import { announce } from '../../lib/announce'
  * reaches `task/move` through this one path and nothing else.
  */
 
-const ARROW_DELTA: Record<string, number | undefined> = { ArrowUp: -1, ArrowDown: 1 }
+const ARROW_DELTA: Record<string, -1 | 1 | undefined> = { ArrowUp: -1, ArrowDown: 1 }
 
 export interface UseTaskReorderOptions {
   /**
@@ -53,10 +53,39 @@ export interface TaskReorder {
   handleDragStart: (id: string) => void
   /** `Reorder.Item`'s `onDragEnd` — forgets the row, so no later reorder claims it. */
   handleDragEnd: () => void
-  /** `DragHandle`'s `onKeyDown` — the grab mode (`Space`, `↑`/`↓`, `Esc`). */
+  /**
+   * `DragHandle`'s `onKeyDown` — design-spec 6.4's key bindings, and nothing
+   * else: it decodes `Space`/`↑`/`↓`/`Esc` into the four intents below. A key
+   * it does not recognise is left un-prevented so it bubbles to the row's
+   * `useRowShortcuts`.
+   */
   handleHandleKeyDown: (event: KeyboardEvent, id: string) => void
-  /** `DragHandle`'s `onBlur` — drops the lifted look when focus leaves. */
+  /** `DragHandle`'s `onBlur` — `release`, bound to the element that loses focus. */
   handleHandleBlur: (id: string) => void
+  /**
+   * Design-spec 6.4 as four intents plus `release`, so a mode driven by
+   * something other than keys — the mobile ↑/↓/«Готово» strip of FELA-177 —
+   * runs the *same* transitions and announces the same words instead of
+   * restating them. `handleHandleKeyDown` is one caller, not the owner.
+   *
+   * Each is scoped to the row it names: `grab` is refused while another row
+   * is held, and `step`/`drop`/`cancel` do nothing unless `id` is the held
+   * row. A caller cannot step a row that was never lifted, or cancel one the
+   * list has since dropped.
+   */
+  grab: (id: string) => void
+  /** One *visible* slot, announced as «Позиция N из M». Silent at the ends — no wrap-around. */
+  step: (id: string, delta: -1 | 1) => void
+  /** Commits the row where it stands and announces it. The steps were already written as they happened. */
+  drop: (id: string) => void
+  /** Puts the row back where it was lifted from (design-spec 6.4's `Esc`) and announces it. */
+  cancel: (id: string) => void
+  /**
+   * Gives up the mode without announcing and without reverting — what focus
+   * leaving the handle means. There is no key left to drop or cancel with,
+   * and every step is already committed, so this only drops the lifted look.
+   */
+  release: (id: string) => void
   /**
    * Steps a row one *visible* slot and announces its new position — the
    * writer behind `useRowShortcuts`'s `Ctrl/Cmd+↑/↓`. Silent at the ends of
@@ -263,32 +292,89 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
     [ids, applyMove, titleOf],
   )
 
-  const handleHandleKeyDown = useCallback(
-    (event: KeyboardEvent, id: string) => {
+  const grab = useCallback(
+    (id: string) => {
       const index = ids.indexOf(id)
       if (index === -1) return
+      // Another row is still held — one grab at a time.
+      if (held !== null) return
+
+      const storeIndex = tasks.findIndex((task) => task.id === id)
+      // A rendered row is always in the store; nothing to put back if it
+      // somehow is not, so it does not get lifted either.
+      if (storeIndex === -1) return
+
+      originPrevId.current = storeIndex > 0 ? (tasks[storeIndex - 1]?.id ?? null) : null
+      setGrabbedId(id)
+      announce(`Задача «${titleOf(id)}» поднята, позиция ${index + 1} из ${ids.length}`)
+    },
+    [ids, tasks, held, titleOf],
+  )
+
+  const step = useCallback(
+    (id: string, delta: -1 | 1) => {
+      if (held !== id) return
+      const index = ids.indexOf(id)
+      if (index === -1) return
+
+      const to = index + delta
+      if (to < 0 || to >= ids.length) return
+      if (applyMove(index, to)) announce(`Позиция ${to + 1} из ${ids.length}`)
+    },
+    [ids, held, applyMove],
+  )
+
+  const drop = useCallback(
+    (id: string) => {
+      if (held !== id) return
+      const index = ids.indexOf(id)
+      if (index === -1) return
+
+      setGrabbedId(null)
+      announce(`Задача «${titleOf(id)}» опущена на позицию ${index + 1}`)
+    },
+    [ids, held, titleOf],
+  )
+
+  const cancel = useCallback(
+    (id: string) => {
+      if (held !== id) return
+      setGrabbedId(null)
+
+      // Cancelling is the one move measured in store indices. Every step of
+      // the grab was a *visible* step that jumped whatever sits hidden
+      // between the rows, so undoing the visible steps would leave the row
+      // on the far side of those hidden tasks for good.
+      const storeIds = tasks.map((task) => task.id)
+      const storeFrom = storeIds.indexOf(id)
+      if (storeFrom === -1) return
+      const storeTo = resolveOrigin(storeIds, storeFrom, originPrevId.current)
+      if (storeTo !== storeFrom) moveTask(storeFrom, storeTo)
+
+      // Announced in the visible terms the person is reading the list in:
+      // the restored store order, minus the rows this list doesn't render.
+      const restored = withMove(storeIds, storeFrom, storeTo).filter((candidate) =>
+        ids.includes(candidate),
+      )
+      announce(`Перемещение отменено, позиция ${restored.indexOf(id) + 1}`)
+    },
+    [ids, tasks, held, moveTask],
+  )
+
+  const release = useCallback((id: string) => {
+    setGrabbedId((current) => (current === id ? null : current))
+  }, [])
+
+  const handleHandleKeyDown = useCallback(
+    (event: KeyboardEvent, id: string) => {
+      if (!ids.includes(id)) return
 
       if (event.key === ' ') {
         // The handle is a `<button>`: without this, Space would also fire
         // its click on keyup.
         event.preventDefault()
-
-        if (held === id) {
-          setGrabbedId(null)
-          announce(`Задача «${titleOf(id)}» опущена на позицию ${index + 1}`)
-          return
-        }
-        // Another row is still held — one grab at a time.
-        if (held !== null) return
-
-        const storeIndex = tasks.findIndex((task) => task.id === id)
-        // A rendered row is always in the store; nothing to put back if it
-        // somehow is not, so it does not get lifted either.
-        if (storeIndex === -1) return
-
-        originPrevId.current = storeIndex > 0 ? (tasks[storeIndex - 1]?.id ?? null) : null
-        setGrabbedId(id)
-        announce(`Задача «${titleOf(id)}» поднята, позиция ${index + 1} из ${ids.length}`)
+        if (held === id) drop(id)
+        else grab(id)
         return
       }
 
@@ -299,44 +385,23 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
 
       if (event.key === 'Escape') {
         event.preventDefault()
-        setGrabbedId(null)
-
-        // Cancelling is the one move measured in store indices. Every step of
-        // the grab was a *visible* step that jumped whatever sits hidden
-        // between the rows, so undoing the visible steps would leave the row
-        // on the far side of those hidden tasks for good.
-        const storeIds = tasks.map((task) => task.id)
-        const storeFrom = storeIds.indexOf(id)
-        if (storeFrom === -1) return
-        const storeTo = resolveOrigin(storeIds, storeFrom, originPrevId.current)
-        if (storeTo !== storeFrom) moveTask(storeFrom, storeTo)
-
-        // Announced in the visible terms the person is reading the list in:
-        // the restored store order, minus the rows this list doesn't render.
-        const restored = withMove(storeIds, storeFrom, storeTo).filter((candidate) =>
-          ids.includes(candidate),
-        )
-        announce(`Перемещение отменено, позиция ${restored.indexOf(id) + 1}`)
+        cancel(id)
         return
       }
 
       const delta = ARROW_DELTA[event.key]
       if (delta === undefined) return
 
+      // Prevented even at the ends of the list, where `step` does nothing:
+      // otherwise the arrow falls through to the roving `↑`/`↓` and the
+      // *focus* leaves the row the person is still holding.
       event.preventDefault()
-      const to = index + delta
-      if (to < 0 || to >= ids.length) return
-      if (applyMove(index, to)) announce(`Позиция ${to + 1} из ${ids.length}`)
+      step(id, delta)
     },
-    [ids, tasks, held, applyMove, moveTask, titleOf],
+    [ids, held, grab, step, drop, cancel],
   )
 
-  const handleHandleBlur = useCallback((id: string) => {
-    // Focus left the handle, so there is no key left to drop or cancel with.
-    // Every step was already committed through `task/move` as it happened,
-    // so this only drops the lifted look — it reverts nothing.
-    setGrabbedId((current) => (current === id ? null : current))
-  }, [])
+  const handleHandleBlur = useCallback((id: string) => release(id), [release])
 
   return {
     grabbedId: held,
@@ -345,6 +410,11 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
     handleDragEnd,
     handleHandleKeyDown,
     handleHandleBlur,
+    grab,
+    step,
+    drop,
+    cancel,
+    release,
     moveRow,
   }
 }

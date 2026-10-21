@@ -5,6 +5,7 @@ import type { Task } from '../../domain/task'
 import { subscribeToAnnouncements } from '../../lib/announce'
 import { makeTask } from '../../test/factories'
 import { diffMove, resolveOrigin, useTaskReorder } from './useTaskReorder'
+import type { TaskReorder } from './useTaskReorder'
 
 /**
  * `Reorder.Group` reports a whole reordered array; `task/move` is one
@@ -140,6 +141,16 @@ describe('useTaskReorder grab mode', () => {
         })
         sync()
       },
+      /**
+       * The mode without a keyboard — what FELA-177's mobile ↑/↓/«Готово»
+       * strip calls. Same transitions, same words, no `KeyboardEvent`.
+       */
+      intent(run: (api: TaskReorder) => void) {
+        act(() => {
+          run(result.current)
+        })
+        sync()
+      },
       /** The pointer path end to end: pick `id` up, drop the list in `nextIds`. */
       drag(id: string, nextIds: string[]) {
         act(() => {
@@ -246,5 +257,129 @@ describe('useTaskReorder grab mode', () => {
 
     expect(list.displayIds()).toEqual(['b', 'c', 'd'])
     expect(list.announced()).toBe('Перемещение отменено, позиция 2')
+  })
+})
+
+describe('useTaskReorder intents without a keyboard', () => {
+  const unsubscribes: (() => void)[] = []
+
+  afterEach(() => {
+    for (const unsubscribe of unsubscribes) unsubscribe()
+    unsubscribes.length = 0
+  })
+
+  function setup(initial: string[]) {
+    let tasks: Task[] = initial.map((id) => makeTask({ id, title: id.toUpperCase() }))
+
+    const moveTask = (from: number, to: number) => {
+      const next = [...tasks]
+      const [row] = next.splice(from, 1)
+      if (row !== undefined) next.splice(to, 0, row)
+      tasks = next
+    }
+
+    const messages: string[] = []
+    unsubscribes.push(
+      subscribeToAnnouncements((message) => {
+        messages.push(message)
+      }),
+    )
+
+    const { result, rerender } = renderHook(
+      ({ ids }: { ids: string[] }) => useTaskReorder({ tasks, ids, moveTask }),
+      { initialProps: { ids: tasks.map((task) => task.id) } },
+    )
+
+    return {
+      result,
+      run(fn: (api: TaskReorder) => void) {
+        act(() => {
+          fn(result.current)
+        })
+        rerender({ ids: tasks.map((task) => task.id) })
+      },
+      order: () => tasks.map((task) => task.id),
+      messages,
+    }
+  }
+
+  it('runs lift → step → drop with the words design-spec 6.4 asks for', () => {
+    const list = setup(['a', 'b', 'c'])
+
+    list.run((api) => api.grab('a'))
+    expect(list.result.current.grabbedId).toBe('a')
+
+    list.run((api) => api.step('a', 1))
+    expect(list.order()).toEqual(['b', 'a', 'c'])
+
+    list.run((api) => api.drop('a'))
+    expect(list.result.current.grabbedId).toBeNull()
+
+    // Criterion 46: the mobile mode must announce in exactly these words, so
+    // they are asserted here and not merely behind a `KeyboardEvent`.
+    expect(list.messages).toEqual([
+      'Задача «A» поднята, позиция 1 из 3',
+      'Позиция 2 из 3',
+      'Задача «A» опущена на позицию 2',
+    ])
+  })
+
+  it('cancel puts the row back and says so', () => {
+    const list = setup(['a', 'b', 'c'])
+
+    list.run((api) => api.grab('c'))
+    list.run((api) => api.step('c', -1))
+    expect(list.order()).toEqual(['a', 'c', 'b'])
+
+    list.run((api) => api.cancel('c'))
+
+    expect(list.order()).toEqual(['a', 'b', 'c'])
+    expect(list.result.current.grabbedId).toBeNull()
+    expect(list.messages.at(-1)).toBe('Перемещение отменено, позиция 3')
+  })
+
+  it('ignores a step, a drop and a cancel aimed at a row that is not held', () => {
+    const list = setup(['a', 'b', 'c'])
+
+    list.run((api) => api.grab('a'))
+    list.messages.length = 0
+
+    // A second row cannot be lifted, and the first one cannot be stepped,
+    // dropped or cancelled through someone else's id — otherwise a caller
+    // with a stale id reorders the list behind the held row's back.
+    list.run((api) => api.grab('b'))
+    list.run((api) => api.step('b', 1))
+    list.run((api) => api.drop('b'))
+    list.run((api) => api.cancel('b'))
+
+    expect(list.result.current.grabbedId).toBe('a')
+    expect(list.order()).toEqual(['a', 'b', 'c'])
+    expect(list.messages).toEqual([])
+  })
+
+  it('release gives up the mode without announcing or reverting', () => {
+    const list = setup(['a', 'b', 'c'])
+
+    list.run((api) => api.grab('a'))
+    list.run((api) => api.step('a', 1))
+    const after = list.messages.length
+
+    list.run((api) => api.release('a'))
+
+    expect(list.result.current.grabbedId).toBeNull()
+    // The step stays: it was committed through `task/move` as it happened.
+    expect(list.order()).toEqual(['b', 'a', 'c'])
+    expect(list.messages).toHaveLength(after)
+  })
+
+  it('does not step past the ends of the list', () => {
+    const list = setup(['a', 'b'])
+
+    list.run((api) => api.grab('a'))
+    list.messages.length = 0
+    list.run((api) => api.step('a', -1))
+
+    expect(list.order()).toEqual(['a', 'b'])
+    expect(list.messages).toEqual([])
   })
 })
