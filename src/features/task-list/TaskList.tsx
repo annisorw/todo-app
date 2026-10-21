@@ -167,7 +167,11 @@ export function TaskList({
 
   const activeIds = displayActive.map((task) => task.id)
   const roving = useRovingFocus(activeIds)
-  const reorder = useTaskReorder({ tasks, ids: activeIds, moveTask })
+  // The settling rows go in as `pinnedIds`, not left out of `ids`: roving
+  // focus still has to walk them and `Reorder.Group`'s `values` must match
+  // the children rendered here, but their slot is a 600ms freeze-frame and
+  // not a position in the order (see `useTaskReorder`'s `pinnedIds`).
+  const reorder = useTaskReorder({ tasks, ids: activeIds, pinnedIds: settlingIds, moveTask })
 
   // design-spec 3.11a `saving`: a failed write leaves the editor open with
   // its draft intact — the error is already visible through `ErrorBanner`
@@ -283,6 +287,14 @@ export function TaskList({
                   onHandleBlur: () => reorder.handleHandleBlur(task.id),
                   onDragStart: () => reorder.handleDragStart(task.id),
                   onDragEnd: reorder.handleDragEnd,
+                  // design-spec 6.4's intents, for the mobile move mode
+                  // ([FELA-177](/FELA/issues/FELA-177)). The same four the
+                  // handle's key decoder calls, so both modes write the order
+                  // and announce the step through one implementation.
+                  onGrab: () => reorder.grab(task.id),
+                  onStep: (delta) => reorder.step(task.id, delta),
+                  onDrop: () => reorder.drop(task.id),
+                  onCancel: () => reorder.cancel(task.id),
                 }}
               />
             ))}
