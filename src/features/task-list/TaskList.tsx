@@ -1,11 +1,13 @@
 import { AnimatePresence } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
+import { EmptyState } from '../../components/EmptyState'
 import { toDateKey } from '../../domain/dueDate'
 import type { Filter, TaskView } from '../../domain/filters'
 import { isDone } from '../../domain/task'
 import type { Task, TaskPatch } from '../../domain/task'
 import { useToast } from '../../state/useToast'
 import { useTaskStore } from '../../state/useTaskStore'
+import { FILTER_LABELS } from '../toolbar/filterLabels'
 import { CompletedSection } from './CompletedSection'
 import { TaskRow } from './TaskRow'
 import { useRovingFocus } from './useRovingFocus'
@@ -24,6 +26,10 @@ export interface TaskListProps {
   panelId: string
   /** The selected filter tab's id — this panel's `aria-labelledby` (TechLead note on FELA-16/FELA-15). */
   activeTabId: string
+  /** `EmptyState no-search-results`'s "Очистить поиск" action (design-spec S4). */
+  onClearSearch: () => void
+  /** `EmptyState no-search-results`'s "Искать во всех" action — only reachable when `filter !== 'all'`. */
+  onSearchAll: () => void
 }
 
 /** A toggled-done task mid-`task-settle`, pinned to its pre-toggle slot. */
@@ -54,7 +60,15 @@ interface SettlingEntry {
  * change or a delete during the delay would show someone else's slot, or a
  * since-removed task (FELA-126).
  */
-export function TaskList({ view, query, filter, panelId, activeTabId }: TaskListProps) {
+export function TaskList({
+  view,
+  query,
+  filter,
+  panelId,
+  activeTabId,
+  onClearSearch,
+  onSearchAll,
+}: TaskListProps) {
   const { tasks, toggleTask, editTask, removeTask, restoreRemoved, clearCompleted, lastRemoved } = useTaskStore()
   const { pushToast } = useToast()
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -183,13 +197,19 @@ export function TaskList({ view, query, filter, panelId, activeTabId }: TaskList
   return (
     <div id={panelId} role="tabpanel" aria-labelledby={activeTabId}>
       {displayActive.length === 0 && displayCompleted.length === 0 ? (
-        <p className="py-(--space-8) text-center text-body text-secondary">
-          {query !== ''
-            ? 'По этому запросу задач не найдено.'
-            : filter === 'completed'
-              ? 'Пока нет выполненных задач.'
-              : 'Пока нет активных задач.'}
-        </p>
+        query !== '' ? (
+          <EmptyState
+            variant="no-search-results"
+            query={query}
+            activeFilterLabel={filter === 'all' ? undefined : FILTER_LABELS[filter]}
+            onClearSearch={onClearSearch}
+            onSearchAll={filter === 'all' ? undefined : onSearchAll}
+          />
+        ) : filter === 'completed' ? (
+          <EmptyState variant="no-completed" />
+        ) : (
+          <EmptyState variant="no-active" />
+        )
       ) : (
         <ul aria-label="Задачи" className="flex flex-col gap-(--space-1)">
           <AnimatePresence initial={false}>

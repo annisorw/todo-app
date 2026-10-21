@@ -17,19 +17,47 @@ function seed(tasks: Task[]) {
   localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify({ version: TASKS_SCHEMA_VERSION, tasks }))
 }
 
-function Harness({ filter = 'all', query = '' }: { filter?: Filter; query?: string }) {
+function Harness({
+  filter = 'all',
+  query = '',
+  onClearSearch = vi.fn(),
+  onSearchAll = vi.fn(),
+}: {
+  filter?: Filter
+  query?: string
+  onClearSearch?: () => void
+  onSearchAll?: () => void
+}) {
   const { tasks } = useTaskStore()
   const view = selectTaskView(tasks, { filter, query })
-  return <TaskList view={view} query={query} filter={filter} panelId="panel" activeTabId="tab-all" />
+  return (
+    <TaskList
+      view={view}
+      query={query}
+      filter={filter}
+      panelId="panel"
+      activeTabId="tab-all"
+      onClearSearch={onClearSearch}
+      onSearchAll={onSearchAll}
+    />
+  )
 }
 
-function renderTaskList(tasks: Task[], options?: { filter?: Filter; query?: string }) {
+function renderTaskList(
+  tasks: Task[],
+  options?: { filter?: Filter; query?: string; onClearSearch?: () => void; onSearchAll?: () => void },
+) {
   seed(tasks)
   return render(
     <TaskStoreProvider>
       <ToastProvider>
         <LiveRegion />
-        <Harness filter={options?.filter} query={options?.query} />
+        <Harness
+          filter={options?.filter}
+          query={options?.query}
+          onClearSearch={options?.onClearSearch}
+          onSearchAll={options?.onSearchAll}
+        />
       </ToastProvider>
     </TaskStoreProvider>,
   )
@@ -774,9 +802,48 @@ describe('TaskList', () => {
   })
 
   describe('empty states', () => {
-    it('shows a message when there are no tasks at all', () => {
-      renderTaskList([])
-      expect(screen.getByText('Пока нет активных задач.')).toBeInTheDocument()
+    it('shows EmptyState no-active when the active filter has zero tasks (design-spec S5)', () => {
+      renderTaskList(
+        [makeTask({ id: 't1', title: 'Готово', completedAt: '2026-01-01T00:00:00.000Z' })],
+        { filter: 'active' },
+      )
+      expect(screen.getByText('Все активные задачи выполнены')).toBeInTheDocument()
+    })
+
+    it('shows EmptyState no-completed when the completed filter has zero tasks', () => {
+      renderTaskList([makeTask({ id: 't1', title: 'Активная' })], { filter: 'completed' })
+      expect(screen.getByText('Пока нет выполненных задач')).toBeInTheDocument()
+    })
+
+    it('shows EmptyState no-search-results with the query, and resets the filter via "Искать во всех"', async () => {
+      const user = userEvent.setup()
+      const onSearchAll = vi.fn()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })], {
+        filter: 'active',
+        query: 'контракт',
+        onSearchAll,
+      })
+
+      expect(screen.getByText('По запросу «контракт» нет задач')).toBeInTheDocument()
+      expect(screen.getByText('Проверьте раскладку или сбросьте фильтр «Активные».')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Искать во всех' }))
+      expect(onSearchAll).toHaveBeenCalledOnce()
+    })
+
+    it('hides "Искать во всех" and clears the search via "Очистить поиск" when the filter is already "Все"', async () => {
+      const user = userEvent.setup()
+      const onClearSearch = vi.fn()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })], {
+        filter: 'all',
+        query: 'контракт',
+        onClearSearch,
+      })
+
+      expect(screen.queryByRole('button', { name: 'Искать во всех' })).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Очистить поиск' }))
+      expect(onClearSearch).toHaveBeenCalledOnce()
     })
   })
 })
