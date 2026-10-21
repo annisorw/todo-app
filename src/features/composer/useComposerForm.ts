@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { KeyboardEvent } from 'react'
+import { announce } from '../../lib/announce'
 import { MAX_TASKS, MAX_TITLE_LENGTH, TITLE_COUNTER_THRESHOLD } from '../../domain/limits'
 import { normalizeTitle } from '../../domain/task'
 import type { Priority, TaskDraft } from '../../domain/task'
@@ -78,6 +79,7 @@ export function useComposerForm({ addTask, isAtLimit }: UseComposerFormOptions):
     }
 
     addTask({ title: normalized, priority, dueDate })
+    announce(`Задача добавлена: «${normalized}»`)
     setTitleState('')
     setPriority('none')
     setDueDate(null)

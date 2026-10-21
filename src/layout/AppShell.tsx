@@ -1,11 +1,14 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { LiveRegion } from '../components/LiveRegion'
 import { ToastProvider } from '../state/ToastProvider'
 import { AppHeader } from './AppHeader'
+import type { ShortcutsPanelHandle } from './AppHeader'
 import { AuroraBackground } from './AuroraBackground'
 
 interface AppShellProps {
   children: ReactNode
+  /** Handed straight to `AppHeader` so the global `?` shortcut can open its shortcuts panel. */
+  headerRef?: Ref<ShortcutsPanelHandle>
 }
 
 /**
@@ -20,14 +23,14 @@ interface AppShellProps {
  * `main`'s vertical padding lives here, not on whatever renders inside it —
  * otherwise every block mounted in `main` starts guessing its own top gap.
  */
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children, headerRef }: AppShellProps) {
   return (
     <div className="relative min-h-dvh">
       <AuroraBackground />
 
       <div className="relative z-(--z-content) flex min-h-dvh flex-col">
         <ToastProvider>
-          <AppHeader />
+          <AppHeader ref={headerRef} />
 
           <main className="mx-auto w-full max-w-(--layout-content-max) flex-1 px-(--layout-gutter) pt-(--space-5) pb-[120px] sm:pt-(--space-8) sm:pb-(--space-20)">
             {children}
