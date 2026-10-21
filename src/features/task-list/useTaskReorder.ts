@@ -25,6 +25,9 @@ import { announce } from '../../lib/announce'
 
 const ARROW_DELTA: Record<string, -1 | 1 | undefined> = { ArrowUp: -1, ArrowDown: 1 }
 
+/** One shared empty set, so an omitted `pinnedIds` does not change identity every render. */
+const NOTHING_PINNED: ReadonlySet<string> = new Set()
+
 export interface UseTaskReorderOptions {
   /**
    * The whole store order. `task/move` indexes into *this* array, never into
@@ -34,6 +37,20 @@ export interface UseTaskReorderOptions {
   tasks: Task[]
   /** Ids of the rows the active list renders, in display order. */
   ids: string[]
+  /**
+   * Rows the list renders that take no part in the order: a task checked off
+   * holds its old slot for the 600ms `task-settle` window (FELA-126), but
+   * from the moment it was checked its place is `completedAt`, and the slot
+   * on screen is a freeze-frame rather than a position.
+   *
+   * They have to stay in `ids` — `useRovingFocus` must still walk them and
+   * `Reorder.Group`'s `values` must match the children it renders — so the
+   * order logic is told about them separately instead: a step moves *past* a
+   * pinned row to the real neighbour beyond it, and the announced position
+   * counts only the rows that are really in the order, which is the number
+   * that is still true once the window closes.
+   */
+  pinnedIds?: ReadonlySet<string>
   /** The one order mutator (`task/move`), straight off `useTaskStore`. */
   moveTask: (from: number, to: number) => void
 }
@@ -208,7 +225,54 @@ export function resolveOrigin(
   return prev < from ? prev + 1 : prev
 }
 
-export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions): TaskReorder {
+/**
+ * The next slot in `direction` that really takes part in the order.
+ *
+ * A pinned row (see `pinnedIds`) is stepped *over*, not onto: its slot is a
+ * freeze-frame of where it used to be, so landing on it writes the moved row
+ * behind a task the active list does not even show — the list stands still
+ * while the announcement claims a new position. `-1` at the end of the list:
+ * no wrap-around.
+ */
+export function stepSlot(
+  ids: readonly string[],
+  pinnedIds: ReadonlySet<string>,
+  from: number,
+  direction: -1 | 1,
+): number {
+  for (let i = from + direction; i >= 0 && i < ids.length; i += direction) {
+    const id = ids[i]
+    if (id !== undefined && !pinnedIds.has(id)) return i
+  }
+  return -1
+}
+
+/**
+ * Where a pointer drop lands once pinned rows are taken out.
+ *
+ * The drop slot comes from the gesture, so it can be a pinned row's
+ * freeze-frame. Walking back from it *towards* the row's own slot puts the
+ * row next to the last real neighbour it visibly passed, which is the move
+ * the person saw. `-1` when there is nothing but pinned rows in between —
+ * then the gesture moved the row past nothing, and no `task/move` is right.
+ *
+ * With nothing pinned this is `to` itself, so the ordinary drag is untouched.
+ */
+export function dropSlot(
+  ids: readonly string[],
+  pinnedIds: ReadonlySet<string>,
+  from: number,
+  to: number,
+): number {
+  const back = to > from ? -1 : 1
+  for (let i = to; i !== from; i += back) {
+    const id = ids[i]
+    if (id !== undefined && !pinnedIds.has(id)) return i
+  }
+  return -1
+}
+
+export function useTaskReorder({ tasks, ids, pinnedIds, moveTask }: UseTaskReorderOptions): TaskReorder {
   const [grabbedId, setGrabbedId] = useState<string | null>(null)
   // The row the held one sat behind in the **store** when it was lifted —
   // see `resolveOrigin`.
@@ -225,6 +289,18 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
   // lifted.
   const held = grabbedId !== null && ids.includes(grabbedId) ? grabbedId : null
   if (grabbedId !== held) setGrabbedId(held)
+
+  const pinned = pinnedIds ?? NOTHING_PINNED
+
+  /**
+   * The list as the order sees it: the rendered rows minus the pinned ones.
+   * Positions are announced against *this*, so «позиция 2 из 4» stays true
+   * after the `task-settle` window closes and the row leaves the list.
+   */
+  const inOrder = useCallback((list: readonly string[]) => list.filter((id) => !pinned.has(id)), [pinned])
+
+  /** The position a row would be announced at, 1-based, once `list` is the display order. */
+  const rankIn = useCallback((list: readonly string[], id: string) => inOrder(list).indexOf(id) + 1, [inOrder])
 
   const titleOf = useCallback(
     (id: string) => tasks.find((task) => task.id === id)?.title ?? '',
@@ -246,6 +322,11 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
       const fromId = ids[from]
       const toId = ids[to]
       if (fromId === undefined || toId === undefined) return false
+      // Backstop for both callers: a pinned row has no place in the order to
+      // move it to or from, and translating its freeze-frame slot into a
+      // store index is meaningless (see `pinnedIds`). Silent rather than
+      // wrong — the slot resolvers above are supposed to have ruled it out.
+      if (pinned.has(fromId) || pinned.has(toId)) return false
 
       const storeFrom = tasks.findIndex((task) => task.id === fromId)
       const storeTo = tasks.findIndex((task) => task.id === toId)
@@ -254,7 +335,7 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
       moveTask(storeFrom, storeTo)
       return true
     },
-    [ids, tasks, moveTask],
+    [ids, tasks, pinned, moveTask],
   )
 
   const handleDragStart = useCallback((id: string) => {
@@ -272,9 +353,15 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
       // arrays, which is ambiguous for two neighbours (see `diffMove`).
       const move = diffMove(ids, nextIds, pointerDragId.current ?? undefined)
       if (move === null) return
-      applyMove(move.from, move.to)
+
+      // The drop slot is wherever the gesture ended, which can be a pinned
+      // row's freeze-frame — `dropSlot` pulls it back to the last real
+      // neighbour the row passed.
+      const to = dropSlot(ids, pinned, move.from, move.to)
+      if (to === -1) return
+      applyMove(move.from, to)
     },
-    [ids, applyMove],
+    [ids, pinned, applyMove],
   )
 
   const moveRow = useCallback(
@@ -282,20 +369,26 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
       const index = ids.indexOf(id)
       if (index === -1) return
 
-      const to = index + delta
-      if (to < 0 || to >= ids.length) return
+      const to = stepSlot(ids, pinned, index, delta)
+      if (to === -1) return
 
       if (applyMove(index, to)) {
-        announce(`Задача «${titleOf(id)}» перемещена на позицию ${to + 1} из ${ids.length}`)
+        const next = withMove(ids, index, to)
+        announce(
+          `Задача «${titleOf(id)}» перемещена на позицию ${rankIn(next, id)} из ${inOrder(next).length}`,
+        )
       }
     },
-    [ids, applyMove, titleOf],
+    [ids, pinned, applyMove, titleOf, rankIn, inOrder],
   )
 
   const grab = useCallback(
     (id: string) => {
       const index = ids.indexOf(id)
       if (index === -1) return
+      // A pinned row is on its way out of the list and has no position to
+      // move from (see `pinnedIds`); it shows no handle either.
+      if (pinned.has(id)) return
       // Another row is still held — one grab at a time.
       if (held !== null) return
 
@@ -306,9 +399,9 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
 
       originPrevId.current = storeIndex > 0 ? (tasks[storeIndex - 1]?.id ?? null) : null
       setGrabbedId(id)
-      announce(`Задача «${titleOf(id)}» поднята, позиция ${index + 1} из ${ids.length}`)
+      announce(`Задача «${titleOf(id)}» поднята, позиция ${rankIn(ids, id)} из ${inOrder(ids).length}`)
     },
-    [ids, tasks, held, titleOf],
+    [ids, tasks, held, pinned, titleOf, rankIn, inOrder],
   )
 
   const step = useCallback(
@@ -317,11 +410,14 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
       const index = ids.indexOf(id)
       if (index === -1) return
 
-      const to = index + delta
-      if (to < 0 || to >= ids.length) return
-      if (applyMove(index, to)) announce(`Позиция ${to + 1} из ${ids.length}`)
+      const to = stepSlot(ids, pinned, index, delta)
+      if (to === -1) return
+      if (applyMove(index, to)) {
+        const next = withMove(ids, index, to)
+        announce(`Позиция ${rankIn(next, id)} из ${inOrder(next).length}`)
+      }
     },
-    [ids, held, applyMove],
+    [ids, held, pinned, applyMove, rankIn, inOrder],
   )
 
   const drop = useCallback(
@@ -331,9 +427,9 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
       if (index === -1) return
 
       setGrabbedId(null)
-      announce(`Задача «${titleOf(id)}» опущена на позицию ${index + 1}`)
+      announce(`Задача «${titleOf(id)}» опущена на позицию ${rankIn(ids, id)}`)
     },
-    [ids, held, titleOf],
+    [ids, held, titleOf, rankIn],
   )
 
   const cancel = useCallback(
@@ -353,12 +449,12 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
 
       // Announced in the visible terms the person is reading the list in:
       // the restored store order, minus the rows this list doesn't render.
-      const restored = withMove(storeIds, storeFrom, storeTo).filter((candidate) =>
-        ids.includes(candidate),
+      const restored = inOrder(
+        withMove(storeIds, storeFrom, storeTo).filter((candidate) => ids.includes(candidate)),
       )
       announce(`Перемещение отменено, позиция ${restored.indexOf(id) + 1}`)
     },
-    [ids, tasks, held, moveTask],
+    [ids, tasks, held, moveTask, inOrder],
   )
 
   const release = useCallback((id: string) => {

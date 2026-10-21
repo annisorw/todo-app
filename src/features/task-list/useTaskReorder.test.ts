@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Task } from '../../domain/task'
 import { subscribeToAnnouncements } from '../../lib/announce'
 import { makeTask } from '../../test/factories'
-import { diffMove, resolveOrigin, useTaskReorder } from './useTaskReorder'
+import { diffMove, dropSlot, resolveOrigin, stepSlot, useTaskReorder } from './useTaskReorder'
 import type { TaskReorder } from './useTaskReorder'
 
 /**
@@ -65,6 +65,52 @@ describe('diffMove', () => {
 
   it('survives a single-row list', () => {
     expect(diffMove(['a'], ['a'])).toBeNull()
+  })
+})
+
+describe('stepSlot', () => {
+  const pinned = new Set(['p'])
+
+  it('is the next slot when nothing is pinned', () => {
+    expect(stepSlot(['a', 'b', 'c'], new Set(), 0, 1)).toBe(1)
+    expect(stepSlot(['a', 'b', 'c'], new Set(), 2, -1)).toBe(1)
+  })
+
+  it('steps over a pinned row to the neighbour beyond it', () => {
+    // `p` is rendered between `a` and `b` but is on its way out of the list,
+    // so one step down from `a` is `b`'s slot, not `p`'s.
+    expect(stepSlot(['a', 'p', 'b'], pinned, 0, 1)).toBe(2)
+    expect(stepSlot(['a', 'p', 'b'], pinned, 2, -1)).toBe(0)
+  })
+
+  it('steps over a run of pinned rows', () => {
+    expect(stepSlot(['a', 'p', 'q', 'b'], new Set(['p', 'q']), 0, 1)).toBe(3)
+  })
+
+  it('reports no slot at the ends of the list', () => {
+    expect(stepSlot(['a', 'b'], new Set(), 1, 1)).toBe(-1)
+    expect(stepSlot(['a', 'b'], new Set(), 0, -1)).toBe(-1)
+    // Only pinned rows left in that direction: nothing to step onto.
+    expect(stepSlot(['a', 'p'], pinned, 0, 1)).toBe(-1)
+  })
+})
+
+describe('dropSlot', () => {
+  const pinned = new Set(['p'])
+
+  it('is the drop slot itself when nothing is pinned', () => {
+    expect(dropSlot(['a', 'b', 'c'], new Set(), 0, 2)).toBe(2)
+    expect(dropSlot(['a', 'b', 'c'], new Set(), 2, 0)).toBe(0)
+  })
+
+  it('pulls a drop on a pinned slot back to the last real neighbour passed', () => {
+    expect(dropSlot(['a', 'b', 'p'], pinned, 0, 2)).toBe(1)
+    expect(dropSlot(['p', 'b', 'c'], pinned, 2, 0)).toBe(1)
+  })
+
+  it('reports no slot when only pinned rows were passed', () => {
+    expect(dropSlot(['a', 'p'], pinned, 0, 1)).toBe(-1)
+    expect(dropSlot(['a', 'b'], new Set(), 1, 1)).toBe(-1)
   })
 })
 

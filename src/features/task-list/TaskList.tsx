@@ -158,7 +158,11 @@ export function TaskList({
 
   const activeIds = displayActive.map((task) => task.id)
   const roving = useRovingFocus(activeIds)
-  const reorder = useTaskReorder({ tasks, ids: activeIds, moveTask })
+  // The settling rows go in as `pinnedIds`, not left out of `ids`: roving
+  // focus still has to walk them and `Reorder.Group`'s `values` must match
+  // the children rendered here, but their slot is a 600ms freeze-frame and
+  // not a position in the order (see `useTaskReorder`'s `pinnedIds`).
+  const reorder = useTaskReorder({ tasks, ids: activeIds, pinnedIds: settlingIds, moveTask })
 
   function handleSave(id: string, patch: TaskPatch) {
     editTask(id, patch)
