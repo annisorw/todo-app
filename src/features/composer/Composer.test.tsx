@@ -4,8 +4,10 @@ import userEvent from '@testing-library/user-event'
 import { createRef } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { LiveRegion } from '../../components/LiveRegion'
+import type { Filter } from '../../domain/filters'
 import { MAX_TITLE_LENGTH, TITLE_COUNTER_THRESHOLD } from '../../domain/limits'
 import { TaskStoreProvider } from '../../state/TaskStoreProvider'
+import { ToastProvider } from '../../state/ToastProvider'
 import { useTaskStore } from '../../state/useTaskStore'
 import { stubMatchMedia } from '../../test/matchMedia'
 import { Composer } from './Composer'
@@ -22,12 +24,14 @@ function TaskTitles() {
   )
 }
 
-function renderComposer() {
+function renderComposer(filter: Filter = 'all') {
   return render(
     <TaskStoreProvider>
-      <Composer />
-      <LiveRegion />
-      <TaskTitles />
+      <ToastProvider>
+        <Composer filter={filter} />
+        <LiveRegion />
+        <TaskTitles />
+      </ToastProvider>
     </TaskStoreProvider>,
   )
 }
@@ -226,7 +230,9 @@ describe('Composer imperative handle', () => {
     const ref = createRef<ComposerHandle>()
     render(
       <TaskStoreProvider>
-        <Composer ref={ref} />
+        <ToastProvider>
+          <Composer ref={ref} filter="all" />
+        </ToastProvider>
       </TaskStoreProvider>,
     )
 
@@ -242,7 +248,9 @@ describe('Composer imperative handle', () => {
     const ref = createRef<ComposerHandle>()
     render(
       <TaskStoreProvider>
-        <Composer ref={ref} />
+        <ToastProvider>
+          <Composer ref={ref} filter="all" />
+        </ToastProvider>
       </TaskStoreProvider>,
     )
 
@@ -253,6 +261,56 @@ describe('Composer imperative handle', () => {
     })
 
     expect(screen.getByRole('dialog', { name: 'Добавить задачу' })).toBeInTheDocument()
+  })
+})
+
+/**
+ * design-spec S5: adding a task while the `Готовые` filter is active sends
+ * it straight to `Активные`, out of the filtered view — without the toast,
+ * nothing on screen changes and the user has no way to tell the task was
+ * added at all.
+ */
+describe('Composer — toast on add while filtered to completed (design-spec S5)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    stubMatchMedia(false)
+  })
+
+  it('shows the exact S5 toast when adding a task while filtered to "Готовые"', async () => {
+    const user = userEvent.setup()
+    renderComposer('completed')
+
+    const field = screen.getByRole('textbox', { name: 'Текст новой задачи' })
+    await user.click(field)
+    await user.type(field, 'Новая задача{Enter}')
+
+    expect(screen.getByText('Задача добавлена в «Активные»')).toBeInTheDocument()
+    expect(field).toHaveFocus()
+    expect(field).toHaveValue('')
+  })
+
+  it.each(['all', 'active'] as const)('does not show the S5 toast when the filter is "%s"', async (filter) => {
+    const user = userEvent.setup()
+    renderComposer(filter)
+
+    const field = screen.getByRole('textbox', { name: 'Текст новой задачи' })
+    await user.click(field)
+    await user.type(field, 'Новая задача{Enter}')
+
+    expect(screen.queryByText('Задача добавлена в «Активные»')).not.toBeInTheDocument()
+  })
+
+  it('shows the same toast from the mobile sheet', async () => {
+    const user = userEvent.setup()
+    renderComposer('completed')
+
+    await user.click(screen.getByRole('button', { name: 'Добавить задачу' }))
+    const dialog = screen.getByRole('dialog', { name: 'Добавить задачу' })
+    const field = within(dialog).getByRole('textbox', { name: 'Текст новой задачи' })
+
+    await user.type(field, 'Из шторки{Enter}')
+
+    expect(screen.getByText('Задача добавлена в «Активные»')).toBeInTheDocument()
   })
 })
 
@@ -352,6 +410,45 @@ describe('Composer sheet + chip popover — two stacked Esc layers', () => {
     expect(within(dialog).queryByRole('menu')).not.toBeInTheDocument()
     expect(screen.getByRole('dialog', { name: 'Добавить задачу' })).toBeInTheDocument()
     expect(field).toHaveFocus()
+  })
+
+  it('Tab forward from "+" wraps to the textarea, and Shift+Tab back from the textarea wraps to "+"', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    const dialog = await openSheet(user)
+    const field = within(dialog).getByRole('textbox', { name: 'Текст новой задачи' })
+    const submit = within(dialog).getByRole('button', { name: 'Добавить задачу в список' })
+
+    submit.focus()
+    await user.tab()
+    expect(field).toHaveFocus()
+
+    field.focus()
+    await user.tab({ shift: true })
+    expect(submit).toHaveFocus()
+  })
+
+  it('Tab stays inside the sheet while a chip popover is open, cycling through its menu items', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    const dialog = await openSheet(user)
+    const chip = within(dialog).getByRole('button', { name: 'Приоритет' })
+    await user.click(chip)
+
+    const menu = within(dialog).getByRole('menu')
+    const menuItems = within(menu).getAllByRole('menuitem')
+    const last = menuItems[menuItems.length - 1]!
+
+    last.focus()
+    await user.tab()
+
+    // The popover renders inline inside the dialog, so the trap's live
+    // re-query picks its items up too — Tab never escapes to the page
+    // behind the sheet while the menu is open.
+    expect(within(dialog).getByRole('menu')).toBeInTheDocument()
+    expect(dialog.contains(document.activeElement)).toBe(true)
   })
 })
 

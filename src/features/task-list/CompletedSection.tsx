@@ -7,6 +7,22 @@ import type { RowKeyDownHandler } from '../shortcuts/useRowShortcuts'
 import { TaskRow } from './TaskRow'
 import { useRovingFocus } from './useRovingFocus'
 
+/**
+ * Accusative, as object of "удалить": 1 задачу · 2 задачи · 5 задач · 11
+ * задач · 21 задачу. Same shape as domain/dueDate.ts's day pluralizer, but
+ * the singular form differs because that one is genitive ("на N дней"),
+ * not accusative.
+ */
+function pluralizeTasks(count: number): string {
+  const lastTwo = count % 100
+  if (lastTwo >= 11 && lastTwo <= 14) return 'задач'
+
+  const last = count % 10
+  if (last === 1) return 'задачу'
+  if (last >= 2 && last <= 4) return 'задачи'
+  return 'задач'
+}
+
 export interface CompletedSectionProps {
   completed: Task[]
   /**
@@ -82,7 +98,9 @@ export function CompletedSection({
 
       <ConfirmDialog
         open={confirmOpen}
-        completedCount={totalCompletedCount}
+        title={`Удалить все выполненные (${totalCompletedCount})?`}
+        confirmLabel={`Удалить ${totalCompletedCount} ${pluralizeTasks(totalCompletedCount)}`}
+        cancelLabel="Отмена"
         onConfirm={handleConfirm}
         onCancel={() => setConfirmOpen(false)}
       />

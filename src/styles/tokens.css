@@ -56,6 +56,14 @@
   --color-success: #34D399;
   --color-danger: #FB7185;
 
+  /* Search-hit backing for `<mark>` (spec 3.11). Taken from the accent family
+   * (here --color-accent-text at 28%), because accent already means "this is
+   * the thing you asked for" in this interface and a match is the same role.
+   * There is no yellow in the palette and one state does not justify adding
+   * one. Only the backing is a token: the glyph keeps --color-text-primary,
+   * so the highlight moves the background, not the letter. */
+  --color-search-hit-bg: rgba(167,139,250,.28);
+
   --skeleton-base: rgba(255,255,255,.05);
   --skeleton-shine: rgba(255,255,255,.11);
 
@@ -250,6 +258,11 @@
   --color-overdue: #D6214B;
   --color-success: #0F7A55;
   --color-danger: #C01B41;
+
+  /* Light's accent for text is the solid --color-accent (#6D45F0), and on a
+   * near-white surface it needs less alpha than dark's lighter violet to read
+   * as the same strength of wash. */
+  --color-search-hit-bg: rgba(109,69,240,.18);
 
   /* The shine is lighter than the base in both themes, so here — on a light
    * surface — the shine alpha is the *smaller* one. Inverting them to "shine is

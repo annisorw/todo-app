@@ -2,29 +2,18 @@ import { useEffect, useId, useRef } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useDismissable } from '../lib/useDismissable'
 import { Button } from './Button'
+import type { ButtonVariant } from './Button'
 
 export interface ConfirmDialogProps {
   open: boolean
-  /** N in "Delete all completed (N)?" (spec 3.16 — the one scenario). */
-  completedCount: number
+  title: string
+  body?: string
+  confirmLabel: string
+  cancelLabel: string
+  /** @default 'danger' */
+  confirmVariant?: ButtonVariant
   onConfirm: () => void
   onCancel: () => void
-}
-
-/**
- * Accusative, as object of "удалить": 1 задачу · 2 задачи · 5 задач · 11
- * задач · 21 задачу. Same shape as domain/dueDate.ts's day pluralizer, but
- * the singular form differs because that one is genitive ("на N дней"),
- * not accusative.
- */
-function pluralizeTasks(count: number): string {
-  const lastTwo = count % 100
-  if (lastTwo >= 11 && lastTwo <= 14) return 'задач'
-
-  const last = count % 10
-  if (last === 1) return 'задачу'
-  if (last >= 2 && last <= 4) return 'задачи'
-  return 'задач'
 }
 
 /**
@@ -36,24 +25,55 @@ function pluralizeTasks(count: number): string {
  * for exactly as long as it is mounted, so a closed dialog must not be on the
  * stack at all. Splitting the component is what makes that unrepresentable.
  */
-export function ConfirmDialog({ open, completedCount, onConfirm, onCancel }: ConfirmDialogProps) {
+export function ConfirmDialog({
+  open,
+  title,
+  body,
+  confirmLabel,
+  cancelLabel,
+  confirmVariant = 'danger',
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps) {
   if (!open) return null
 
-  return <ConfirmDialogPanel completedCount={completedCount} onConfirm={onConfirm} onCancel={onCancel} />
+  return (
+    <ConfirmDialogPanel
+      title={title}
+      body={body}
+      confirmLabel={confirmLabel}
+      cancelLabel={cancelLabel}
+      confirmVariant={confirmVariant}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
+  )
 }
 
-type ConfirmDialogPanelProps = Omit<ConfirmDialogProps, 'open'>
+type ConfirmDialogPanelProps = Omit<ConfirmDialogProps, 'open' | 'confirmVariant'> & {
+  confirmVariant: ButtonVariant
+}
 
-function ConfirmDialogPanel({ completedCount, onConfirm, onCancel }: ConfirmDialogPanelProps) {
+function ConfirmDialogPanel({
+  title,
+  body,
+  confirmLabel,
+  cancelLabel,
+  confirmVariant,
+  onConfirm,
+  onCancel,
+}: ConfirmDialogPanelProps) {
   const titleId = useId()
+  const bodyId = useId()
   const cancelRef = useRef<HTMLButtonElement>(null)
   const confirmRef = useRef<HTMLButtonElement>(null)
   const triggerRef = useRef<Element | null>(null)
 
-  // Esc приходит от единственного владельца (`lib/dismissStack.ts`), поэтому
-  // попап, открытый внутри диалога, забирает первое нажатие, а диалог под ним
-  // закрывается только следующим. Без `returnFocusTo`: фокус возвращает эффект
-  // ниже при размонтировании, а ссылка хуку вернула бы его второй раз.
+  // Esc comes from the single owner (`lib/dismissStack.ts`), so a popover
+  // opened inside the dialog takes the first press, and the dialog beneath
+  // it closes only on the next one. No `returnFocusTo`: the effect below
+  // returns focus on unmount, and passing the ref to the hook too would
+  // return it a second time.
   useDismissable({ onDismiss: onCancel })
 
   useEffect(() => {
@@ -65,8 +85,8 @@ function ConfirmDialogPanel({ completedCount, onConfirm, onCancel }: ConfirmDial
     }
   }, [])
 
-  // Только ловушка Tab. Esc сюда не доходит: стек гасит нажатие на `document`
-  // в фазе перехвата, то есть раньше, чем React доберётся до этого дерева.
+  // Tab trap only. Esc never reaches here: the stack swallows the keypress
+  // on `document` during the capture phase, before React gets to this tree.
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Tab') return
 
@@ -92,18 +112,25 @@ function ConfirmDialogPanel({ completedCount, onConfirm, onCancel }: ConfirmDial
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={body === undefined ? undefined : bodyId}
         className="w-full max-w-(--size-modal-md) rounded-(--radius-xl) bg-surface-2 p-(--space-6) shadow-lg animate-modal-panel-in"
       >
         <h2 id={titleId} className="text-h1 text-primary">
-          Удалить все выполненные ({completedCount})?
+          {title}
         </h2>
+
+        {body !== undefined && (
+          <p id={bodyId} className="text-body text-secondary mt-(--space-3)">
+            {body}
+          </p>
+        )}
 
         <div className="mt-(--space-6) flex justify-end gap-(--space-3)">
           <Button ref={cancelRef} variant="secondary" onClick={onCancel}>
-            Отмена
+            {cancelLabel}
           </Button>
-          <Button ref={confirmRef} variant="danger" onClick={onConfirm}>
-            Удалить {completedCount} {pluralizeTasks(completedCount)}
+          <Button ref={confirmRef} variant={confirmVariant} onClick={onConfirm}>
+            {confirmLabel}
           </Button>
         </div>
       </div>

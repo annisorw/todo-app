@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ErrorBanner } from '../../components/ErrorBanner'
 import { LiveRegion } from '../../components/LiveRegion'
 import type { Filter } from '../../domain/filters'
 import { selectTaskView } from '../../domain/filters'
@@ -11,6 +12,8 @@ import { useTaskStore } from '../../state/useTaskStore'
 import { TASKS_SCHEMA_VERSION, TASKS_STORAGE_KEY } from '../../storage/taskStorage'
 import { makeTask } from '../../test/factories'
 import { stubMatchMedia } from '../../test/matchMedia'
+import { quotaError, storedItems, storedPayload, stubLocalStorage } from '../../test/storage'
+import type { StorageStub, StorageStubOptions } from '../../test/storage'
 import { TaskList } from './TaskList'
 
 function seed(tasks: Task[]) {
@@ -327,6 +330,19 @@ describe('TaskList', () => {
       expect(screen.getByRole('status')).toHaveTextContent('Изменения сохранены: «Купить хлеб»')
     })
 
+    // Criterion 5 names four entry points into the editor: E, double-click, the
+    // edit button and the "Изменить" menu item. The row menu item is covered in
+    // the "mobile row menu button" describe block below; this is the desktop
+    // edit `IconButton`, the one other entry point with no click-through test.
+    it('opens the editor from the desktop edit button, not just double-click', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      await user.click(screen.getByRole('button', { name: 'Изменить задачу: Купить молоко' }))
+
+      expect(screen.getByRole('textbox', { name: 'Текст задачи' })).toBeInTheDocument()
+    })
+
     it('rolls back all three fields on Отмена, leaving the task untouched', async () => {
       const user = userEvent.setup()
       renderTaskList([makeTask({ id: 't1', title: 'Купить молоко', priority: 'low', dueDate: null })])
@@ -496,6 +512,169 @@ describe('TaskList', () => {
     })
   })
 
+  describe('a storage write failure during save (FELA-127, design-spec 3.11a `saving`)', () => {
+    let stub: StorageStub | null = null
+
+    function ErrorProbe() {
+      const { storageError } = useTaskStore()
+      return <p data-testid="store-error">{storageError ?? 'none'}</p>
+    }
+
+    // Mutates `options` in place and hands the *same* object to the stub —
+    // flipping `options.writeError` afterwards (the "quota frees up" step)
+    // must reach the closure `stubLocalStorage` already captured, not a
+    // copy of it.
+    function renderWithStorage(task: Task, options: StorageStubOptions = {}) {
+      options.items = storedItems(storedPayload([task]))
+      stub = stubLocalStorage(options)
+      return render(
+        <TaskStoreProvider>
+          <ToastProvider>
+            <LiveRegion />
+            <Harness />
+            <ErrorProbe />
+            <ErrorBanner />
+          </ToastProvider>
+        </TaskStoreProvider>,
+      )
+    }
+
+    afterEach(() => {
+      stub?.restore()
+      stub = null
+    })
+
+    it('desktop TaskEditor: a failed write keeps the editor open with the draft and all three fields, and a successful retry completes it', async () => {
+      stubMatchMedia(true)
+      const user = userEvent.setup()
+      const options: StorageStubOptions = { writeError: quotaError() }
+      renderWithStorage(makeTask({ id: 't1', title: 'Купить молоко', priority: 'none', dueDate: null }), options)
+
+      await user.dblClick(screen.getByText('Купить молоко'))
+      const textarea = screen.getByRole('textbox', { name: 'Текст задачи' })
+      await user.clear(textarea)
+      await user.type(textarea, 'Купить хлеб')
+      await user.click(screen.getByRole('button', { name: 'Приоритет' }))
+      await user.click(screen.getByRole('menuitem', { name: /Высокий/ }))
+
+      await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+      // The write really failed (real localStorage.setItem threw) — the
+      // editor must not have closed, the draft must not be lost, and the
+      // failure must be visible through `storageError` (`ErrorBanner`).
+      expect(screen.getByRole('textbox', { name: 'Текст задачи' })).toHaveValue('Купить хлеб')
+      expect(screen.getByRole('button', { name: /Высокий/ })).toBeInTheDocument()
+      expect(screen.getByTestId('store-error')).toHaveTextContent('quota')
+
+      options.writeError = undefined
+      await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+      expect(screen.queryByRole('textbox', { name: 'Текст задачи' })).not.toBeInTheDocument()
+      expect(screen.getByText('Купить хлеб')).toBeInTheDocument()
+      expect(screen.getByTestId('store-error')).toHaveTextContent('none')
+      expect(JSON.parse(stub?.items.get(TASKS_STORAGE_KEY) ?? '')).toMatchObject({
+        tasks: [{ title: 'Купить хлеб', priority: 'high' }],
+      })
+    })
+
+    it('mobile TaskEditorSheet: a failed write keeps the sheet open with the draft, and a successful retry completes it', async () => {
+      stubMatchMedia(false)
+      const user = userEvent.setup()
+      const options: StorageStubOptions = { writeError: quotaError() }
+      renderWithStorage(makeTask({ id: 't1', title: 'Купить молоко', priority: 'none', dueDate: null }), options)
+
+      await user.dblClick(screen.getByText('Купить молоко'))
+      const textarea = screen.getByRole('textbox', { name: 'Текст задачи' })
+      await user.clear(textarea)
+      await user.type(textarea, 'Купить хлеб')
+
+      await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+      expect(screen.getByRole('textbox', { name: 'Текст задачи' })).toHaveValue('Купить хлеб')
+      expect(screen.getByTestId('store-error')).toHaveTextContent('quota')
+
+      options.writeError = undefined
+      await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+      expect(screen.queryByRole('textbox', { name: 'Текст задачи' })).not.toBeInTheDocument()
+      expect(screen.getByText('Купить хлеб')).toBeInTheDocument()
+      expect(screen.getByTestId('store-error')).toHaveTextContent('none')
+    })
+
+    it('Отмена still discards the draft and closes the editor while a write is failing', async () => {
+      stubMatchMedia(true)
+      const user = userEvent.setup()
+      renderWithStorage(makeTask({ id: 't1', title: 'Купить молоко' }), { writeError: quotaError() })
+
+      await user.dblClick(screen.getByText('Купить молоко'))
+      const textarea = screen.getByRole('textbox', { name: 'Текст задачи' })
+      await user.clear(textarea)
+      await user.type(textarea, 'другой текст')
+
+      await user.click(screen.getByRole('button', { name: 'Отмена' }))
+
+      expect(screen.queryByRole('textbox', { name: 'Текст задачи' })).not.toBeInTheDocument()
+      expect(screen.getByText('Купить молоко')).toBeInTheDocument()
+    })
+
+    /**
+     * Review FELA-187, blocker 1: a `'corrupted'` `storageError` is a read
+     * failure, not a write failure — `saveTaskEdit` must not clear it or
+     * replace it with a write outcome even when that write succeeds, or the
+     * banner (and with it the only "Выгрузить в файл" path to the
+     * quarantined bytes, FELA-70/FELA-92) disappears for good.
+     */
+    it('a successful save while storageError is `corrupted` closes the editor but leaves the banner and export button up', async () => {
+      stubMatchMedia(true)
+      const user = userEvent.setup()
+
+      function AddProbe() {
+        const { addTask } = useTaskStore()
+        return (
+          <button
+            type="button"
+            onClick={() => addTask({ title: 'Купить молоко', priority: 'none', dueDate: null })}
+          >
+            add
+          </button>
+        )
+      }
+
+      stub = stubLocalStorage({ items: storedItems('{{{') })
+      render(
+        <TaskStoreProvider>
+          <ToastProvider>
+            <LiveRegion />
+            <Harness />
+            <ErrorProbe />
+            <ErrorBanner />
+            <AddProbe />
+          </ToastProvider>
+        </TaskStoreProvider>,
+      )
+
+      expect(screen.getByTestId('store-error')).toHaveTextContent('corrupted')
+      expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Выгрузить в файл' })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'add' }))
+      await user.dblClick(screen.getByText('Купить молоко'))
+      const textarea = screen.getByRole('textbox', { name: 'Текст задачи' })
+      await user.clear(textarea)
+      await user.type(textarea, 'Купить хлеб')
+
+      await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+      // The write succeeded, so the editor closes — but the read failure
+      // that put the banner up in the first place is untouched.
+      expect(screen.queryByRole('textbox', { name: 'Текст задачи' })).not.toBeInTheDocument()
+      expect(screen.getByText('Купить хлеб')).toBeInTheDocument()
+      expect(screen.getByTestId('store-error')).toHaveTextContent('corrupted')
+      expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Выгрузить в файл' })).toBeInTheDocument()
+    })
+  })
+
   describe('keyboard traversal of the list', () => {
     beforeEach(() => {
       stubMatchMedia(true)
@@ -607,6 +786,30 @@ describe('TaskList', () => {
       await user.click(screen.getByRole('button', { name: 'Отмена' }))
 
       expect(screen.getByText('Готовая')).toBeInTheDocument()
+    })
+
+    it.each([
+      [1, 'Удалить все выполненные (1)?', 'Удалить 1 задачу'],
+      [2, 'Удалить все выполненные (2)?', 'Удалить 2 задачи'],
+      [5, 'Удалить все выполненные (5)?', 'Удалить 5 задач'],
+      [11, 'Удалить все выполненные (11)?', 'Удалить 11 задач'],
+      [21, 'Удалить все выполненные (21)?', 'Удалить 21 задачу'],
+    ])('pluralises the dialog title and confirm label for %i completed tasks', async (count, title, confirmLabel) => {
+      const user = userEvent.setup()
+      const completed = Array.from({ length: count }, (_, index) =>
+        makeTask({
+          id: `completed-${String(index + 1)}`,
+          title: `Готовая ${String(index + 1)}`,
+          completedAt: `2026-10-20T10:${String(index).padStart(2, '0')}:00.000Z`,
+        }),
+      )
+      renderTaskList(completed)
+
+      await user.click(screen.getByRole('button', { name: 'Удалить все выполненные' }))
+
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveTextContent(title)
+      expect(screen.getByRole('button', { name: confirmLabel })).toBeInTheDocument()
     })
 
     it('under an active search filter, names and clears every completed task, not just the visible ones', async () => {
@@ -926,6 +1129,19 @@ describe('TaskList', () => {
       expect(screen.getByRole('menuitem', { name: 'Удалить' })).toBeInTheDocument()
     })
 
+    // Criterion 5's fourth entry point into the editor, alongside E,
+    // double-click and the desktop edit button (the other three are covered
+    // elsewhere in this file).
+    it('opens the editor from the "Изменить" menu item', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      await user.click(screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ }))
+      await user.click(screen.getByRole('menuitem', { name: 'Изменить' }))
+
+      expect(screen.getByRole('textbox', { name: 'Текст задачи' })).toBeInTheDocument()
+    })
+
     it('meets the 44×44 mobile touch target (design-spec 3.6) and names the task in the accessible name', () => {
       renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
 
@@ -1006,6 +1222,38 @@ describe('TaskList', () => {
       fireEvent.touchEnd(row, { changedTouches: [{ clientX: 200, clientY: 50 }] })
 
       expect(screen.getByRole('menu')).toBeInTheDocument()
+    })
+
+    it('reflects menu state on the mobile "more" button aria-expanded (FELA-175 regression)', () => {
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ })
+      expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+
+      fireEvent.click(moreButton)
+      expect(moreButton).toHaveAttribute('aria-expanded', 'true')
+
+      fireEvent.click(moreButton)
+      expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+    })
+  })
+
+  describe('desktop row menu button aria-expanded (FELA-175 regression)', () => {
+    beforeEach(() => {
+      stubMatchMedia(true)
+    })
+
+    it('reflects menu state on the desktop "more" button aria-expanded', () => {
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ })
+      expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+
+      fireEvent.click(moreButton)
+      expect(moreButton).toHaveAttribute('aria-expanded', 'true')
+
+      fireEvent.click(moreButton)
+      expect(moreButton).toHaveAttribute('aria-expanded', 'false')
     })
   })
 })

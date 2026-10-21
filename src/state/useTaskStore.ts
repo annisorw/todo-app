@@ -23,6 +23,14 @@ export interface TaskStoreValue {
   addTask: (draft: TaskDraft) => void
   toggleTask: (id: string) => void
   editTask: (id: string, patch: TaskPatch) => void
+  /**
+   * `TaskEditor`/`TaskEditorSheet`'s «Сохранить» — writes immediately and
+   * reports the outcome, so the caller can decide whether the editor is
+   * allowed to close ([FELA-127](/FELA/issues/FELA-127), design-spec 3.11a
+   * `saving`). `null` — written; otherwise the write failed and the editor
+   * must stay open with the draft intact.
+   */
+  saveTaskEdit: (id: string, patch: TaskPatch) => StorageError | null
   removeTask: (id: string) => void
   restoreRemoved: () => void
   moveTask: (from: number, to: number) => void
