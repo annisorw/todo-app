@@ -19,7 +19,10 @@ import { describe, expect, it } from 'vitest'
  *    a later class-targeted rule or Tailwind utility must win without
  *    `!important`;
  * 2. both colours come from tokens, never a literal (criterion 1);
- * 3. the rule changes no metric that reflows the title. The highlight is
+ * 3. the rule re-inherits `text-decoration-line`, because pinning `color` would
+ *    otherwise hide a completed row's strikethrough under the backing
+ *    (FELA-184);
+ * 4. the rule changes no metric that reflows the title. The highlight is
  *    recomputed on every keystroke, so a `font-weight` second channel or
  *    block-direction padding would make the heading jump under the cursor
  *    while the user is still typing.
@@ -51,8 +54,15 @@ function blockBody(css: string, selector: string | RegExp): string {
 }
 
 const LAYER_BASE = blockBody(CSS_WITHOUT_COMMENTS, '@layer base')
-/** Anchored on a line start so `[data-theme] mark` or `.foo mark` would not match. */
-const MARK_RULE = blockBody(LAYER_BASE, /^\s*mark\s*\{/m)
+
+/**
+ * Anchored on a line start so `[data-theme] mark` or `.foo mark` would not
+ * match. Lazy, not a module constant: if the rule moves out of `@layer base`
+ * this throws, and at module scope that aborts the import — vitest then reports
+ * "no tests" plus the brace-matcher's message, and the one test that is about
+ * the layer never gets to say so.
+ */
+const markRule = () => blockBody(LAYER_BASE, /^\s*mark\s*\{/m)
 
 describe('the <mark> rule', () => {
   it('lives in @layer base, so a class-targeted rule can still override it', () => {
@@ -64,26 +74,38 @@ describe('the <mark> rule', () => {
   })
 
   it('takes its backing and its glyph colour from tokens', () => {
-    expect(MARK_RULE).toMatch(/background-color\s*:\s*var\(--color-search-hit-bg\)/)
-    expect(MARK_RULE).toMatch(/color\s*:\s*var\(--color-text-primary\)/)
+    expect(markRule()).toMatch(/background-color\s*:\s*var\(--color-search-hit-bg\)/)
+    expect(markRule()).toMatch(/color\s*:\s*var\(--color-text-primary\)/)
+  })
+
+  it('re-inherits the strikethrough that pinning `color` took away', () => {
+    // FELA-184. `text-decoration` is painted by the element that declares it,
+    // so the <p>'s line-through lands under the <mark> backing and vanishes
+    // over the matched fragment — on a completed task the highlighted word
+    // loses two of the three §7 channels. `inherit` makes <mark> paint the line
+    // itself, above its own background. Measured in Chromium on built `dist`:
+    // without this declaration getComputedStyle(mark).textDecorationLine is
+    // 'none' on a completed row, with it 'line-through', and the geometry of
+    // both <mark> and the title is unchanged.
+    expect(markRule()).toMatch(/text-decoration-line\s*:\s*inherit/)
   })
 
   it('leaves no hardcoded colour in the rule', () => {
-    expect(MARK_RULE).not.toMatch(/#[\da-f]{3,8}\b/i)
-    expect(MARK_RULE).not.toMatch(/\brgba?\(/)
+    expect(markRule()).not.toMatch(/#[\da-f]{3,8}\b/i)
+    expect(markRule()).not.toMatch(/\brgba?\(/)
   })
 
   it('does not change the weight of the matched text', () => {
     // Deliberate (FELA-170): §7 wants a second, non-colour channel, but the
     // list is already filtered and the LiveRegion announces the match count,
     // so the independence is covered without reflowing the title mid-typing.
-    expect(MARK_RULE).not.toMatch(/font-weight/)
+    expect(markRule()).not.toMatch(/font-weight/)
   })
 
   it('adds no block-direction padding, so the row keeps its line box', () => {
-    expect(MARK_RULE).not.toMatch(/padding-block|padding-top|padding-bottom/)
+    expect(markRule()).not.toMatch(/padding-block|padding-top|padding-bottom/)
     // `padding: 1px 2px` would set the block side too; only the inline
     // shorthand is allowed here.
-    expect(MARK_RULE).not.toMatch(/^\s*padding\s*:/m)
+    expect(markRule()).not.toMatch(/^\s*padding\s*:/m)
   })
 })

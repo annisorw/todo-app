@@ -48,11 +48,17 @@
    * a document default: anything targeting `mark` by class later — including a
    * Tailwind utility — should win without `!important`.
    *
-   * `color` is pinned rather than inherited on purpose. On a completed task the
-   * title is --color-text-tertiary (spec 3.11 `completed`), and tertiary over
-   * this backing measures 3.36:1 in dark — below the 4.5:1 floor. The
-   * strikethrough is still drawn by the <p>, in the <p>'s colour, so the row
-   * keeps reading as completed.
+   * `color` is pinned rather than inherited for contrast. On a completed task
+   * the title is --color-text-tertiary (spec 3.11 `completed`), and tertiary
+   * over this backing measures 3.36:1 in dark — below the 4.5:1 floor.
+   *
+   * Pinning the colour costs the strikethrough, so it is restored explicitly.
+   * `text-decoration` from an ancestor is painted in the ancestor's phase and
+   * the <mark> background lands on top of it, so the line disappears over
+   * exactly the matched fragment. `text-decoration-line: inherit` makes <mark>
+   * draw the line itself, in its own colour, over its own backing — a completed
+   * row then keeps all three channels of spec §7 (tick + strikethrough +
+   * muting) inside the highlight too.
    *
    * No vertical padding and no font-weight change: both would reflow the title
    * on every keystroke, since the highlight is recomputed per input event.
@@ -60,6 +66,7 @@
   mark {
     background-color: var(--color-search-hit-bg);
     color: var(--color-text-primary);
+    text-decoration-line: inherit;
     border-radius: var(--radius-xs);
     padding-inline: 1px;
   }
