@@ -6,10 +6,13 @@ import { segmentTabId } from './components/segmentTabId'
 import { isDone } from './domain/task'
 import { Composer } from './features/composer/Composer'
 import type { ComposerHandle } from './features/composer/Composer'
+import { useGlobalShortcuts } from './features/shortcuts/useGlobalShortcuts'
 import { TaskList } from './features/task-list/TaskList'
 import { Toolbar } from './features/toolbar/Toolbar'
 import { useToolbarState } from './features/toolbar/useToolbarState'
+import { announce } from './lib/announce'
 import { AppShell } from './layout/AppShell'
+import type { ShortcutsPanelHandle } from './layout/AppHeader'
 import { Hero } from './layout/Hero'
 import { TaskStoreProvider } from './state/TaskStoreProvider'
 import { useTaskStore } from './state/useTaskStore'
@@ -28,11 +31,34 @@ import { useTaskStore } from './state/useTaskStore'
  * because it also has to hide `Toolbar`, a sibling.
  */
 function AppBody() {
-  const { tasks } = useTaskStore()
+  const { tasks, lastRemoved, restoreRemoved } = useTaskStore()
   const toolbar = useToolbarState(tasks)
   const panelId = useId()
   const tabIdPrefix = useId()
+
   const composerRef = useRef<ComposerHandle>(null)
+  const headerRef = useRef<ShortcutsPanelHandle>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  // The focus-independent half of design-spec 6.3. The row-scoped keys are
+  // `useRowShortcuts`, declared inside `TaskList` where the row is known.
+  useGlobalShortcuts({
+    newTask: () => composerRef.current?.requestNewTask(),
+    focusSearch: () => searchRef.current?.focus(),
+    setFilter: toolbar.setFilter,
+    openShortcuts: () => headerRef.current?.openShortcuts(),
+    clearSearch: toolbar.clearQuery,
+    // The one undo path: the toast's «Вернуть» dispatches the same
+    // `task/restoreRemoved` (issue point 5). Reading `lastRemoved` first
+    // keeps the key quiet when the slot is empty, so it announces nothing
+    // and restores nothing instead of claiming to have undone something.
+    restoreRemoved: () => {
+      const removed = lastRemoved
+      if (removed === null) return
+      restoreRemoved()
+      announce(`Задача возвращена: «${removed.task.title}»`)
+    },
+  })
 
   const completedCount = tasks.filter(isDone).length
   const activeCount = tasks.length - completedCount
@@ -42,7 +68,7 @@ function AppBody() {
     : `Активных: ${String(activeCount)} · Выполнено: ${String(completedCount)}`
 
   return (
-    <AppShell>
+    <AppShell headerRef={headerRef}>
       <div className="flex flex-col gap-(--space-8)">
         <Hero
           summary={summary}
@@ -55,6 +81,7 @@ function AppBody() {
         ) : (
           <>
             <Toolbar
+              ref={searchRef}
               filter={toolbar.filter}
               query={toolbar.query}
               counts={toolbar.view.counts}

@@ -5,6 +5,8 @@ import { toDateKey } from '../../domain/dueDate'
 import type { Filter, TaskView } from '../../domain/filters'
 import { isDone } from '../../domain/task'
 import type { Task, TaskPatch } from '../../domain/task'
+import { announce } from '../../lib/announce'
+import { useRowShortcuts } from '../shortcuts/useRowShortcuts'
 import { useToast } from '../../state/useToast'
 import { useTaskStore } from '../../state/useTaskStore'
 import { FILTER_LABELS } from '../toolbar/filterLabels'
@@ -56,7 +58,8 @@ export function TaskList({
   onClearSearch,
   onSearchAll,
 }: TaskListProps) {
-  const { tasks, toggleTask, editTask, removeTask, restoreRemoved, clearCompleted, lastRemoved } = useTaskStore()
+  const { tasks, toggleTask, editTask, removeTask, restoreRemoved, moveTask, clearCompleted, lastRemoved } =
+    useTaskStore()
   const { pushToast } = useToast()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [settling, setSettling] = useState<Record<string, Task>>({})
@@ -146,6 +149,43 @@ export function TaskList({
     })
   }
 
+  /**
+   * `Ctrl/Cmd+↑`/`↓` — design-spec 6.4's «альтернатива без режима». The step
+   * is one *visible* neighbour, so a filtered or searched list moves the row
+   * past what the user can actually see; the store index that `task/move`
+   * wants is then looked up from that neighbour. No wrap-around: a move that
+   * silently teleported the first row to the bottom is a different gesture
+   * from "one step".
+   */
+  function moveRow(taskId: string, delta: -1 | 1) {
+    const visibleIndex = displayActive.findIndex((task) => task.id === taskId)
+    if (visibleIndex === -1) return
+
+    const neighbour = displayActive[visibleIndex + delta]
+    if (neighbour === undefined) return
+
+    const from = tasks.findIndex((task) => task.id === taskId)
+    const to = tasks.findIndex((task) => task.id === neighbour.id)
+    if (from === -1 || to === -1) return
+
+    moveTask(from, to)
+    const moved = displayActive[visibleIndex]
+    if (moved === undefined) return
+    announce(
+      `Задача «${moved.title}» перемещена на позицию ${String(visibleIndex + delta + 1)} из ${String(displayActive.length)}`,
+    )
+  }
+
+  // One declaration for both row groups (design-spec 6.3, row-scoped half).
+  const handleRowKeyDown = useRowShortcuts({
+    openEditor: setEditingId,
+    removeTask: (taskId) => {
+      const task = tasks.find((candidate) => candidate.id === taskId)
+      if (task !== undefined) handleRemove(task)
+    },
+    moveTask: moveRow,
+  })
+
   return (
     <div id={panelId} role="tabpanel" aria-labelledby={activeTabId}>
       {displayActive.length === 0 && displayCompleted.length === 0 ? (
@@ -176,6 +216,7 @@ export function TaskList({
                 registerRef={(node) => roving.registerRef(task.id, node)}
                 onFocus={() => roving.handleFocus(task.id)}
                 onKeyDown={(event) => roving.handleKeyDown(event, task.id)}
+                onRowKeyDown={(event) => handleRowKeyDown(event, task.id)}
                 onToggle={() => handleToggle(task)}
                 onOpenEditor={() => setEditingId(task.id)}
                 onCloseEditor={() => setEditingId(null)}
@@ -194,6 +235,7 @@ export function TaskList({
         query={query}
         todayKey={todayKey}
         editingId={editingId}
+        onRowKeyDown={handleRowKeyDown}
         onToggle={(id) => {
           const task = displayCompleted.find((candidate) => candidate.id === id)
           if (task) handleToggle(task)

@@ -53,6 +53,11 @@ export function useRovingFocus(ids: string[]): RovingFocus {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent, id: string) => {
       if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+      // `Ctrl/Cmd+↑`/`↓` *moves* the row (design-spec 6.4) — a different
+      // gesture, owned by `useRowShortcuts`. Without this guard navigation
+      // would fire first and the row would move away from the focused line.
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+
       const index = ids.indexOf(id)
       if (index === -1) return
 

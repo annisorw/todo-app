@@ -44,6 +44,7 @@ function renderRow(overrides: Partial<ComponentProps<typeof TaskRow>> = {}) {
         registerRef={() => {}}
         onFocus={() => {}}
         onKeyDown={() => {}}
+        onRowKeyDown={() => {}}
         onToggle={() => {}}
         onOpenEditor={() => {}}
         onCloseEditor={() => {}}

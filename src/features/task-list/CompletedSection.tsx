@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import type { Task, TaskPatch } from '../../domain/task'
+import type { RowKeyDownHandler } from '../shortcuts/useRowShortcuts'
 import { TaskRow } from './TaskRow'
 import { useRovingFocus } from './useRovingFocus'
 
@@ -20,6 +21,8 @@ export interface CompletedSectionProps {
   query: string
   todayKey: string
   editingId: string | null
+  /** Row-scoped hot keys (`useRowShortcuts`) — declared once in `TaskList` and shared with the active list. */
+  onRowKeyDown: RowKeyDownHandler
   onToggle: (id: string) => void
   onOpenEditor: (id: string) => void
   onCloseEditor: () => void
@@ -48,6 +51,7 @@ export function CompletedSection({
   query,
   todayKey,
   editingId,
+  onRowKeyDown,
   onToggle,
   onOpenEditor,
   onCloseEditor,
@@ -96,6 +100,7 @@ export function CompletedSection({
               registerRef={(node) => roving.registerRef(task.id, node)}
               onFocus={() => roving.handleFocus(task.id)}
               onKeyDown={(event) => roving.handleKeyDown(event, task.id)}
+              onRowKeyDown={(event) => onRowKeyDown(event, task.id)}
               onToggle={() => onToggle(task.id)}
               onOpenEditor={() => onOpenEditor(task.id)}
               onCloseEditor={onCloseEditor}
