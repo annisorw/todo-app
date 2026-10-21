@@ -1,6 +1,17 @@
-import { useId, useState } from 'react'
+import { useImperativeHandle, useState } from 'react'
+import type { Ref } from 'react'
 import { IconButton } from '../components/IconButton'
+import { ShortcutsSheet } from '../components/ShortcutsSheet'
 import { ThemeToggle } from './ThemeToggle'
+
+export interface ShortcutsPanelHandle {
+  /** `?` (design-spec 6.3 / S12) — the key is a second trigger for the header's own button. */
+  openShortcuts: () => void
+}
+
+export interface AppHeaderProps {
+  ref?: Ref<ShortcutsPanelHandle>
+}
 
 function KeyboardIcon() {
   return (
@@ -18,12 +29,19 @@ function KeyboardIcon() {
 
 /**
  * Design spec 3.3. Wordmark left, hotkeys button + `ThemeToggle` right.
- * The hotkeys button opens a stub panel for now — its real content
- * (the shortcuts table) is FELA-19's job.
+ * The hotkeys button opens `ShortcutsSheet` (FELA-19) — a real modal
+ * (`role="dialog"` + `aria-modal="true"`), not a disclosure, so the trigger
+ * carries no `aria-expanded`/`aria-controls` (those belong to a disclosure,
+ * not a dialog — review note on PR #14's stub).
+ *
+ * The panel's open state stays here, with the button that owns it;
+ * `?` (FELA-20) reaches it through the `ref` as a command rather than by
+ * lifting the flag, because nothing outside this component reads it.
  */
-export function AppHeader() {
+export function AppHeader({ ref }: AppHeaderProps = {}) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
-  const panelId = useId()
+
+  useImperativeHandle(ref, () => ({ openShortcuts: () => setShortcutsOpen(true) }), [])
 
   return (
     <header className="h-(--layout-header-h)">
@@ -42,29 +60,13 @@ export function AppHeader() {
           <IconButton
             icon={<KeyboardIcon />}
             aria-label="Горячие клавиши"
-            aria-expanded={shortcutsOpen}
-            aria-controls={panelId}
-            onClick={() => setShortcutsOpen((open) => !open)}
+            onClick={() => setShortcutsOpen(true)}
           />
           <ThemeToggle />
         </div>
-
-        {shortcutsOpen && (
-          <div
-            id={panelId}
-            className="absolute top-full right-(--layout-gutter) z-(--z-dropdown) mt-(--space-2) rounded-(--radius-md) border border-surface-border bg-surface-2 p-(--space-4) text-body text-secondary shadow-md"
-          >
-            <p>Шпаргалка появится позже.</p>
-            <button
-              type="button"
-              onClick={() => setShortcutsOpen(false)}
-              className="mt-(--space-2) text-label text-accent-text"
-            >
-              Закрыть
-            </button>
-          </div>
-        )}
       </div>
+
+      <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </header>
   )
 }

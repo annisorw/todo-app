@@ -11,6 +11,8 @@ export interface PrioritySelectProps {
   value: Priority
   onChange: (value: Priority) => void
   className?: string
+  /** Forwarded to the trigger chip — the desktop row quick-path uses this for roving tabindex. */
+  tabIndex?: number
 }
 
 const PRIORITY_ORDER: Priority[] = ['high', 'medium', 'low', 'none']
@@ -34,7 +36,7 @@ const PRIORITY_GLYPH: Partial<Record<Priority, string>> = {
  * access (architecture, section 2): `Composer`, `TaskEditor` and the
  * desktop row quick-path all drive the same component.
  */
-export function PrioritySelect({ value, onChange, className }: PrioritySelectProps) {
+export function PrioritySelect({ value, onChange, className, tabIndex }: PrioritySelectProps) {
   const [open, setOpen] = useState(false)
   const anchorRef = useRef<HTMLButtonElement>(null)
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
@@ -68,6 +70,7 @@ export function PrioritySelect({ value, onChange, className }: PrioritySelectPro
         aria-controls={open ? menuId : undefined}
         onClick={() => setOpen((isOpen) => !isOpen)}
         className={className}
+        tabIndex={tabIndex}
       />
       {open && (
         // design-spec motion table (section 5) only names `popover-in` — no
