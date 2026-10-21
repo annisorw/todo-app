@@ -390,8 +390,7 @@ export function TaskRow({
   // Three popups live in there: the row `Menu` on both breakpoints, and on
   // desktop the `PrioritySelect` menu (3.12) and the `DueDatePicker` panel
   // (3.13, 224px wide and taller than the row). The row has to be raised
-  // while *any* of them is open — measured with `elementFromPoint` in the
-  // overlap, not reasoned about. `--z-content` and not `--z-dropdown`: the
+  // while *any* of them is open. `--z-content` and not `--z-dropdown`: the
   // row must stay below the sticky toolbar (2.9).
   //
   // The two chip flags are read only while the chips are actually mounted: an
@@ -402,7 +401,17 @@ export function TaskRow({
   const chipsMounted = isDesktop && !isEditing
   const popupOpen = menuOpen || (chipsMounted && (priorityOpen || dueDateOpen))
 
-  const shellClassName = isEditing && isDesktop ? undefined : cn('relative', popupOpen && 'z-(--z-content)')
+  // Every active-list row renders through `Reorder.Item` (`TaskList.tsx`),
+  // which always writes its own inline `z-index` (`unset` at rest, `1` while
+  // dragging — framer-motion/dist/es/components/Reorder/Item.mjs, spread
+  // after `...style`, so a `style` prop here can never win). An unmarked
+  // author rule never beats an inline declaration, so the plain
+  // `z-(--z-content)` utility used below was a no-op: `elementFromPoint` on
+  // the built `dist` kept landing on the next row. Tailwind's `!` modifier
+  // emits `!important`, which does beat an inline style with no `!important`
+  // of its own — that is the only lever available short of moving the popups
+  // out of the row entirely.
+  const shellClassName = isEditing && isDesktop ? undefined : cn('relative', popupOpen && 'z-(--z-content)!')
 
   // The reorderable row's share of `task-add`/`task-delete` — see the
   // comment on the wrapper below. Reduced motion keeps opacity only, so
