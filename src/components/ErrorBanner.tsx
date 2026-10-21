@@ -1,5 +1,5 @@
 import type { StorageError } from '../storage/localStorageDriver'
-import { readCorruptedBackup } from '../storage/taskStorage'
+import { isUnreadableError, readCorruptedBackup } from '../storage/taskStorage'
 import { useTaskStore } from '../state/useTaskStore'
 import { useToast } from '../state/useToast'
 import { Button } from './Button'
@@ -73,10 +73,17 @@ function WarningIcon() {
  * ticket, [FELA-18](/FELA/issues/FELA-18)).
  *
  * "Повторить" really retries: `retryPersist` writes the current list right
- * away and the banner closes only if that write succeeded. One behaviour for
- * all three errors — for `blocked` the retry just fails with the same code,
- * which is the honest answer, and for `quota` it is the whole point
- * ([FELA-64](/FELA/issues/FELA-64)).
+ * away and the banner closes only if that write succeeded. For `blocked` the
+ * retry just fails with the same code, which is the honest answer, and for
+ * `quota` it is the whole point ([FELA-64](/FELA/issues/FELA-64)).
+ *
+ * For `corrupted` that button is **not rendered at all**
+ * ([FELA-70](/FELA/issues/FELA-70)): the read is what failed, writing works, so
+ * a retry would succeed, clear `storageError` and take the banner away — along
+ * with the only control in the whole interface that hands back the quarantined
+ * bytes. A person reading "Повторить" would lose their own backup by pressing
+ * it. There is nothing to retry here, so there is no button; the store refuses
+ * the same thing from its side.
  */
 export function ErrorBanner({ className }: ErrorBannerProps) {
   const { storageError, tasks, retryPersist } = useTaskStore()
@@ -85,9 +92,10 @@ export function ErrorBanner({ className }: ErrorBannerProps) {
   if (storageError === null) return null
 
   const copy = COPY[storageError]
+  const isUnreadable = isUnreadableError(storageError)
 
   const handleExport = () => {
-    if (storageError === 'corrupted') {
+    if (isUnreadable) {
       const backup = readCorruptedBackup()
       // No quarantined bytes (or the quarantine read itself failed) means
       // there is nothing to restore — downloading an empty envelope here
@@ -121,9 +129,11 @@ export function ErrorBanner({ className }: ErrorBannerProps) {
       </div>
 
       <div className="flex shrink-0 gap-(--space-2)">
-        <Button variant="secondary" size="sm" onClick={retryPersist}>
-          Повторить
-        </Button>
+        {!isUnreadable && (
+          <Button variant="secondary" size="sm" onClick={retryPersist}>
+            Повторить
+          </Button>
+        )}
         <Button variant="ghost" size="sm" onClick={handleExport}>
           Выгрузить в файл
         </Button>
