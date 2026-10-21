@@ -11,6 +11,11 @@ describe('SearchField', () => {
     expect(screen.getByText('/')).toBeInTheDocument()
   })
 
+  it('renders the "/" hint in the mono-numeral class (design-spec 2.5, kbd always text-mono-num)', () => {
+    render(<SearchField value="" onChange={vi.fn()} />)
+    expect(screen.getByText('/')).toHaveClass('text-mono-num')
+  })
+
   it('hides the hint and shows a clear button once there is a value', () => {
     render(<SearchField value="task" onChange={vi.fn()} />)
     expect(screen.queryByText('/')).not.toBeInTheDocument()

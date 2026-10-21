@@ -123,7 +123,7 @@ export function TaskEditorSheet({ task, onSave, onCancel }: TaskEditorSheetProps
         animate={{ opacity: 1 }}
         transition={{ duration: 0.16 }}
         onClick={form.handleSave}
-        className="absolute inset-0 bg-[rgba(3,3,10,0.55)]"
+        className="absolute inset-0 bg-modal-backdrop"
       />
 
       <motion.div
@@ -160,7 +160,7 @@ export function TaskEditorSheet({ task, onSave, onCancel }: TaskEditorSheetProps
             <span />
           )}
           {form.showCounter && (
-            <span className={cn('text-caption', form.isTooLong ? 'text-danger' : 'text-tertiary')}>
+            <span className={cn('text-caption text-mono-num', form.isTooLong ? 'text-danger' : 'text-tertiary')}>
               {form.title.length}/{MAX_TITLE_LENGTH}
             </span>
           )}
