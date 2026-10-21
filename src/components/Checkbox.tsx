@@ -87,7 +87,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         aria-hidden="true"
         style={{ borderWidth: '1.5px' }}
         className={cn(
-          'pointer-events-none relative inline-flex size-(--size-checkbox) items-center justify-center overflow-hidden rounded-full border-control-border transition-colors duration-(--duration-fast) ease-standard',
+          'pointer-events-none relative inline-flex size-(--size-checkbox) items-center justify-center rounded-full border-control-border transition-colors duration-(--duration-fast) ease-standard',
           checked ? 'border-transparent shadow-glow-accent' : 'peer-hover:border-text-tertiary',
           disabled && 'opacity-45',
         )}
@@ -98,7 +98,12 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
             // Flush with the border's outer edge (border-box), not the inner
             // padding box an absolute `inset-0` child would otherwise sit in
             // — the fill has to show through the transparent checked border
-            // the same way a plain background on this element used to.
+            // the same way a plain background on this element used to. No
+            // `overflow-hidden` on the parent to crop this: that clips at
+            // the *padding* box, eating this negative inset and leaving a
+            // ring of page background where the transparent border is. The
+            // fill is its own `rounded-full` circle that never grows past
+            // this box, so nothing needs clipping anyway.
             inset: '-1.5px',
             backgroundImage: 'var(--gradient-accent)',
             opacity: checked ? 1 : 0,

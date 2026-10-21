@@ -110,14 +110,21 @@ function ExpandableTitle({
          * every wrapped line correctly, not just a single band. It's a
          * sibling of `<p>`, not nested inside it: `textContent` reads
          * through child elements, so a duplicate nested inside would double
-         * up `<p>`'s own text for anything asserting on it directly. */}
+         * up `<p>`'s own text for anything asserting on it directly.
+         * `text-tertiary` is repeated here (not inherited) so the overlay's
+         * color always matches the real text's — one `done` check, two
+         * layers, never drifting apart. `select-none` keeps it out of mouse
+         * selection / copy, which would otherwise duplicate the title. */}
         <span
           aria-hidden="true"
           style={{
             clipPath: done ? 'inset(0 0 0 0)' : 'inset(0 100% 0 0)',
             transition: prefersReducedMotion ? 'none' : 'clip-path 240ms var(--ease-spring)',
           }}
-          className="pointer-events-none absolute inset-0 overflow-hidden line-through"
+          className={cn(
+            'pointer-events-none absolute inset-0 overflow-hidden line-through select-none',
+            done && 'text-tertiary',
+          )}
         >
           {Array.from(task.title).map((char, index) => (
             <span key={index}>{char}</span>
