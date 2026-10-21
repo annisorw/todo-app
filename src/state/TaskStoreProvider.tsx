@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { TaskDraft, TaskPatch } from '../domain/task'
 import { isAtTaskLimit } from '../domain/taskList'
 import type { StorageError } from '../storage/localStorageDriver'
-import { readTasks } from '../storage/taskStorage'
+import { isUnreadableError, readTasks } from '../storage/taskStorage'
 import { useDebouncedPersist } from '../storage/useDebouncedPersist'
 import { EMPTY_TASK_STATE, taskReducer } from './taskReducer'
 import type { TaskState } from './taskReducer'
@@ -69,10 +69,21 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
    * Не удалось — тот же или новый код отказа, и баннер остаётся. Прятать его
    * без попытки записи нельзя: человек прочитал «Повторить» и после исчезнувшего
    * баннера считает, что сохранилось ([FELA-64](/FELA/issues/FELA-64)).
+   *
+   * Исключение — отказ **чтения**: удавшаяся запись его не снимает
+   * ([FELA-70](/FELA/issues/FELA-70)). Про читаемость основного ключа она
+   * ничего не говорит, а сняв отказ, она убрала бы вместе с баннером
+   * единственную кнопку к карантинным байтам. `ErrorBanner` при таком отказе
+   * «Повторить» и не рисует; проверка здесь — чтобы инвариант не зависел от
+   * того, какая кнопка вызовет `retryPersist` завтра.
    */
   const retryPersist = useCallback(() => {
-    dispatch({ type: 'storage/error', error: persistNow() })
-  }, [persistNow])
+    const error = persistNow()
+    if (error === null && state.storageError !== null && isUnreadableError(state.storageError)) {
+      return
+    }
+    dispatch({ type: 'storage/error', error })
+  }, [persistNow, state.storageError])
 
   const value = useMemo<TaskStoreValue>(
     () => ({

@@ -38,17 +38,23 @@ const SRC = join(process.cwd(), 'src')
  *
  * - `outline-none` / `outline-hidden`: the same Tailwind utility before and
  *   after the v4 rename; both still parse.
- * - `outline-0`: compiles to `outline-width: 0` at specificity `0,2,0`, which
- *   beats `:focus-visible { outline: 2px solid ... }` from `base.css` (`0,1,0`).
- *   The ring is gone just as completely, only the spelling differs.
+ * - `outline-0`: compiles to `outline-width: 0`, leaving the ring with no
+ *   width. Gone just as completely, only the spelling differs.
  * - `outline-transparent`: the ring is still drawn, in nothing.
+ *
+ * Specificity decides none of this, and it is worth saying once: the default
+ * ring lives in `@layer base` and these utilities in `@layer utilities`, which
+ * comes later, so every spelling below wins over the ring no matter how
+ * specific either selector is. That is also why this guard matters more after
+ * FELA-65 than before it — until the ring moved into a layer, an unlayered
+ * `base.css` beat every suppression here and they were all inert.
  *
  * Leading variants (`focus:`, `focus-visible:`, `md:focus:`) are captured so a
  * site is identified by the utility as written, not by a bare stem.
  * `outline-offset` and `outline: 2px solid ...` deliberately do not match.
  */
 const SUPPRESSION_PATTERNS: readonly RegExp[] = [
-  /(?:[\w-]+:)*outline-(?:none|hidden|0|transparent)\b/g,
+  /(?:[\w-]+:)*outline-(?:none|hidden|0|transparent)\b!?/g,
   /outline\s*:\s*(?:none|0)\s*(?=;|$)/gm,
   /outline-(?:width\s*:\s*0|color\s*:\s*transparent)\s*(?=;|$)/gm,
 ]
@@ -62,8 +68,8 @@ interface AllowedSuppression {
   occurrences: number
   /** Why the ring may go away here. */
   reason: string
-  /** File carrying the replacement treatment — often a parent component. */
-  ringProvidedBy: string
+  /** Files carrying the replacement treatment — often parent components. */
+  ringProvidedBy: readonly string[]
   /** Class or declaration that *is* the replacement, asserted to still exist. */
   marker: string
 }
@@ -75,16 +81,16 @@ const ALLOWED_SUPPRESSIONS: readonly AllowedSuppression[] = [
     occurrences: 1,
     reason:
       'Spec 3.8: the focused state belongs to the whole field, so the ring moves from the bare input to the wrapper, which takes an accent border plus glow.',
-    ringProvidedBy: 'features/toolbar/SearchField.tsx',
+    ringProvidedBy: ['features/toolbar/SearchField.tsx'],
     marker: 'border-accent-text shadow-glow-accent',
   },
   {
-    file: 'features/composer/ComposerFields.tsx',
-    utility: 'focus:outline-none',
+    file: 'features/composer/ComposerTextarea.tsx',
+    utility: 'focus-visible:outline-none',
     occurrences: 1,
     reason:
-      'Spec 3.7: the composer card glows while its textarea has focus, so a second ring on the textarea itself would double the treatment. Covers the desktop path only: ComposerSheet renders the same fields with no focus treatment of its own, so on mobile this suppression currently has no replacement — FELA-65 decides what the sheet shows, and this entry has to be revisited then.',
-    ringProvidedBy: 'features/composer/Composer.tsx',
+      'Spec 3.7/3.8: the shared textarea glows via its wrapper on both call sites, so a second ring on the textarea itself would double the treatment — the desktop card glows directly, the sheet wraps the field in its own bordered box (same pattern as SearchField).',
+    ringProvidedBy: ['features/composer/Composer.tsx', 'features/composer/ComposerSheet.tsx'],
     marker: 'shadow-glow-accent',
   },
 ]
@@ -120,12 +126,45 @@ const SUPPRESSIONS: readonly Suppression[] = sourceFiles(SRC).flatMap((path) => 
     )
 })
 
+/** `@`-rules enclosing `index`, outermost first, as `@name arg` (e.g.
+ *  `@layer base`) so a bare `@layer` match can't pass for the right one.
+ *  Comments are blanked (not removed) so a `@` in prose cannot fake a layer
+ *  and indices stay aligned. */
+function enclosingAtRules(css: string, index: number): string[] {
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, (match) => ' '.repeat(match.length))
+  const stack: (string | null)[] = []
+  let since = 0
+  for (let i = 0; i < index; i += 1) {
+    const char = text[i]
+    if (char === '{') {
+      const prelude = text.slice(since, i).match(/@([\w-]+)([^{};]*)$/)
+      stack.push(prelude ? `@${prelude[1]} ${(prelude[2] ?? '').trim()}`.trim() : null)
+      since = i + 1
+    } else if (char === '}' || char === ';') {
+      if (char === '}') stack.pop()
+      since = i + 1
+    }
+  }
+  return stack.filter((entry): entry is string => entry !== null)
+}
+
 describe('focus ring', () => {
   it('is defined once in base.css for every interactive element', () => {
     const baseCss = readFileSync(join(SRC, 'styles/base.css'), 'utf8')
 
     expect(baseCss).toMatch(/:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--color-focus-ring\)/)
     expect(baseCss).toMatch(/:focus-visible\s*\{[^}]*outline-offset:\s*2px/)
+  })
+
+  it('keeps the default ring in a cascade layer, so suppressing it works at all', () => {
+    const baseCss = readFileSync(join(SRC, 'styles/base.css'), 'utf8')
+    const ring = baseCss.indexOf(':focus-visible')
+
+    expect(ring, 'no `:focus-visible` rule in base.css').toBeGreaterThan(-1)
+    expect(
+      enclosingAtRules(baseCss, ring),
+      'An unlayered rule beats every layered utility regardless of specificity, so moving the ring out of `@layer base` (into `@layer utilities`, or out of any layer) makes every ALLOWED_SUPPRESSIONS entry inert and brings the double focus indicator back — silently, because the allowlist would still look consistent.',
+    ).toContain('@layer base')
   })
 
   it('is never suppressed outside the allowlist', () => {
@@ -149,10 +188,12 @@ describe('focus ring', () => {
       `${entry.file} has ${sites.length} \`${entry.utility}\` site(s), the allowlist expects ${entry.occurrences}. More means a second element lost its ring under cover of this entry; fewer means the entry is stale and should be dropped rather than left to cover a future one.`,
     ).toBe(entry.occurrences)
 
-    const provider = readFileSync(join(SRC, entry.ringProvidedBy), 'utf8')
-    expect(
-      provider,
-      `${entry.file} drops the focus ring because ${entry.ringProvidedBy} replaces it (${entry.reason}) — that replacement is gone, so the field now has no focus indicator.`,
-    ).toContain(entry.marker)
+    for (const path of entry.ringProvidedBy) {
+      const provider = readFileSync(join(SRC, path), 'utf8')
+      expect(
+        provider,
+        `${entry.file} drops the focus ring because ${path} replaces it (${entry.reason}) — that replacement is gone, so the field now has no focus indicator.`,
+      ).toContain(entry.marker)
+    }
   })
 })
