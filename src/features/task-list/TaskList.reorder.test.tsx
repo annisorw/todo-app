@@ -260,6 +260,84 @@ describe('TaskList reordering', () => {
     })
   })
 
+  /**
+   * A row inside its 600ms `task-settle` window (FELA-126) is rendered in the
+   * active list but is already done: its slot is a freeze-frame of where it
+   * used to be, not a place in the order. A move that counts it writes an
+   * order the person never sees happen — so these read the *store*, and they
+   * read the announcement, which is the thing that must not lie.
+   */
+  describe('a row mid task-settle (FELA-126 overlap)', () => {
+    function makeFour(): Task[] {
+      return [
+        makeTask({ id: 't1', title: 'Первая' }),
+        makeTask({ id: 't2', title: 'Вторая' }),
+        makeTask({ id: 't3', title: 'Третья' }),
+        makeTask({ id: 't4', title: 'Четвёртая' }),
+      ]
+    }
+
+    function storedOrder(): string[] {
+      act(() => {
+        vi.advanceTimersByTime(PERSIST_DEBOUNCE_MS)
+      })
+      return readTasks().tasks.map((task) => task.title)
+    }
+
+    it('steps past a settling row instead of behind it, and announces the position that survives the settle', () => {
+      vi.useFakeTimers()
+      renderTaskList(makeFour())
+
+      // «Вторая» is checked off and holds slot 2 for 600ms.
+      fireEvent.click(screen.getAllByRole('checkbox')[1]!)
+      expect(renderedOrder()).toEqual(['Первая', 'Вторая', 'Третья', 'Четвёртая'])
+
+      fireEvent.keyDown(handleFor('Первая'), { key: 'ArrowDown', ctrlKey: true })
+
+      // Counting the settling row would have written `Первая` behind a task
+      // the active list does not render: the screen would not move at all,
+      // and «позиция 2 из 4» would be a lie the moment the window closed.
+      expect(announcement()).toBe('Задача «Первая» перемещена на позицию 2 из 3')
+      expect(storedOrder()).toEqual(['Вторая', 'Третья', 'Первая', 'Четвёртая'])
+
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      // The settled row is filtered out rather than expected to be gone: its
+      // `AnimatePresence` exit copy lingers in jsdom (no real rAF under fake
+      // timers), so its absence proves nothing. What this asserts is the
+      // order of the rows that stayed.
+      expect(renderedOrder().filter((title) => title !== 'Вторая')).toEqual([
+        'Третья',
+        'Первая',
+        'Четвёртая',
+      ])
+    })
+
+    it('counts the grab-mode steps in rows that are really in the order', () => {
+      vi.useFakeTimers()
+      renderTaskList(makeFour())
+
+      fireEvent.click(screen.getAllByRole('checkbox')[1]!)
+
+      fireEvent.keyDown(handleFor('Третья'), { key: ' ' })
+      expect(announcement()).toBe('Задача «Третья» поднята, позиция 2 из 3')
+
+      fireEvent.keyDown(handleFor('Третья'), { key: 'ArrowUp' })
+      expect(announcement()).toBe('Позиция 1 из 3')
+      expect(storedOrder()).toEqual(['Третья', 'Первая', 'Вторая', 'Четвёртая'])
+    })
+
+    it('gives a settling row no handle to be moved by', () => {
+      vi.useFakeTimers()
+      renderTaskList(makeFour())
+
+      fireEvent.click(screen.getAllByRole('checkbox')[1]!)
+
+      expect(screen.queryByRole('button', { name: 'Переместить задачу: Вторая' })).not.toBeInTheDocument()
+    })
+  })
+
   describe('persistence (acceptance criterion 9)', () => {
     it('keeps the new order through a reload', () => {
       vi.useFakeTimers()
