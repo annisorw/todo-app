@@ -61,6 +61,13 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
    * the write (spec: unchanged save is a no-op). Otherwise it always writes,
    * even if the patch by itself is a no-op — that's what lets pressing
    * «Сохранить» again after a failed write retry it once the cause clears.
+   *
+   * Same read-failure guard as `retryPersist` below ([FELA-70](/FELA/issues/FELA-70),
+   * [FELA-92](/FELA/issues/FELA-92)): a `'corrupted'` `storageError` is never
+   * overwritten by a write outcome, successful or not — it's the only path
+   * back to the quarantined bytes. The *returned* value still carries the
+   * real write result so `handleSave` closes the editor on a successful
+   * save even while that banner stays up.
    */
   const saveTaskEdit = useCallback(
     (id: string, patch: TaskPatch): StorageError | null => {
@@ -70,7 +77,9 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       if (nextTasks === state.tasks && state.storageError === null) return null
 
       const error = writeTasks(nextTasks)
-      dispatch({ type: 'storage/error', error })
+      if (state.storageError === null || !isUnreadableError(state.storageError)) {
+        dispatch({ type: 'storage/error', error })
+      }
       return error
     },
     [state.tasks, state.storageError],

@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ErrorBanner } from '../../components/ErrorBanner'
 import { LiveRegion } from '../../components/LiveRegion'
 import type { Filter } from '../../domain/filters'
 import { selectTaskView } from '../../domain/filters'
@@ -519,6 +520,7 @@ describe('TaskList', () => {
             <LiveRegion />
             <Harness />
             <ErrorProbe />
+            <ErrorBanner />
           </ToastProvider>
         </TaskStoreProvider>,
       )
@@ -600,6 +602,63 @@ describe('TaskList', () => {
 
       expect(screen.queryByRole('textbox', { name: 'Текст задачи' })).not.toBeInTheDocument()
       expect(screen.getByText('Купить молоко')).toBeInTheDocument()
+    })
+
+    /**
+     * Review FELA-187, blocker 1: a `'corrupted'` `storageError` is a read
+     * failure, not a write failure — `saveTaskEdit` must not clear it or
+     * replace it with a write outcome even when that write succeeds, or the
+     * banner (and with it the only "Выгрузить в файл" path to the
+     * quarantined bytes, FELA-70/FELA-92) disappears for good.
+     */
+    it('a successful save while storageError is `corrupted` closes the editor but leaves the banner and export button up', async () => {
+      stubMatchMedia(true)
+      const user = userEvent.setup()
+
+      function AddProbe() {
+        const { addTask } = useTaskStore()
+        return (
+          <button
+            type="button"
+            onClick={() => addTask({ title: 'Купить молоко', priority: 'none', dueDate: null })}
+          >
+            add
+          </button>
+        )
+      }
+
+      stub = stubLocalStorage({ items: storedItems('{{{') })
+      render(
+        <TaskStoreProvider>
+          <ToastProvider>
+            <LiveRegion />
+            <Harness />
+            <ErrorProbe />
+            <ErrorBanner />
+            <AddProbe />
+          </ToastProvider>
+        </TaskStoreProvider>,
+      )
+
+      expect(screen.getByTestId('store-error')).toHaveTextContent('corrupted')
+      expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Выгрузить в файл' })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'add' }))
+      await user.dblClick(screen.getByText('Купить молоко'))
+      const textarea = screen.getByRole('textbox', { name: 'Текст задачи' })
+      await user.clear(textarea)
+      await user.type(textarea, 'Купить хлеб')
+
+      await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+      // The write succeeded, so the editor closes — but the read failure
+      // that put the banner up in the first place is untouched.
+      expect(screen.queryByRole('textbox', { name: 'Текст задачи' })).not.toBeInTheDocument()
+      expect(screen.getByText('Купить хлеб')).toBeInTheDocument()
+      expect(screen.getByTestId('store-error')).toHaveTextContent('corrupted')
+      expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Выгрузить в файл' })).toBeInTheDocument()
     })
   })
 
