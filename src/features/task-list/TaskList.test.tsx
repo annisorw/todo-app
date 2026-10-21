@@ -609,6 +609,30 @@ describe('TaskList', () => {
       expect(screen.getByText('Готовая')).toBeInTheDocument()
     })
 
+    it.each([
+      [1, 'Удалить все выполненные (1)?', 'Удалить 1 задачу'],
+      [2, 'Удалить все выполненные (2)?', 'Удалить 2 задачи'],
+      [5, 'Удалить все выполненные (5)?', 'Удалить 5 задач'],
+      [11, 'Удалить все выполненные (11)?', 'Удалить 11 задач'],
+      [21, 'Удалить все выполненные (21)?', 'Удалить 21 задачу'],
+    ])('pluralises the dialog title and confirm label for %i completed tasks', async (count, title, confirmLabel) => {
+      const user = userEvent.setup()
+      const completed = Array.from({ length: count }, (_, index) =>
+        makeTask({
+          id: `completed-${String(index + 1)}`,
+          title: `Готовая ${String(index + 1)}`,
+          completedAt: `2026-10-20T10:${String(index).padStart(2, '0')}:00.000Z`,
+        }),
+      )
+      renderTaskList(completed)
+
+      await user.click(screen.getByRole('button', { name: 'Удалить все выполненные' }))
+
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveTextContent(title)
+      expect(screen.getByRole('button', { name: confirmLabel })).toBeInTheDocument()
+    })
+
     it('under an active search filter, names and clears every completed task, not just the visible ones', async () => {
       // TechLead review on PR #47: with a query active, the dialog quoted
       // the filtered count (1) and the button said "Удалить 1 задачу", but
