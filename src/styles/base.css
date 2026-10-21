@@ -52,13 +52,17 @@
    * the title is --color-text-tertiary (spec 3.11 `completed`), and tertiary
    * over this backing measures 3.36:1 in dark — below the 4.5:1 floor.
    *
-   * Pinning the colour costs the strikethrough, so it is restored explicitly.
-   * `text-decoration` from an ancestor is painted in the ancestor's phase and
-   * the <mark> background lands on top of it, so the line disappears over
-   * exactly the matched fragment. `text-decoration-line: inherit` makes <mark>
-   * draw the line itself, in its own colour, over its own backing — a completed
-   * row then keeps all three channels of spec §7 (tick + strikethrough +
-   * muting) inside the highlight too.
+   * Pinning the colour also costs the strikethrough its contrast, so the line
+   * is restored explicitly. Without this declaration the only line over the
+   * matched fragment is the <p>'s own: Chromium paints it above the
+   * translucent backing, but in `--color-text-tertiary` — measured on built
+   * `dist`, rgb(138,138,168) over the dark backing is 3.05:1 and
+   * rgb(110,110,138) over the light one 3.63:1, so the line reads as broken
+   * exactly where the highlight sits. `text-decoration-line: inherit` makes
+   * <mark> draw the line itself, in its own pinned colour (dark
+   * rgb(244,244,251), light rgb(21,21,42)) — a completed row then keeps all
+   * three channels of spec section 7 (tick + strikethrough + muting) inside
+   * the highlight too.
    *
    * No vertical padding and no font-weight change: both would reflow the title
    * on every keystroke, since the highlight is recomputed per input event.
