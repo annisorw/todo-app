@@ -744,7 +744,7 @@ function RowBody({
         // strip is `basis-full`, so it needs the row to wrap. Without the
         // mode the row must stay single-line, or a long title plus chips
         // would push the buttons down.
-        moveMode && 'flex-wrap py-(--space-2)',
+        moveMode && 'flex-wrap',
         // S8: an opaque fill, because a translucent card in flight reads
         // dirty over the rows it passes — so the lifted row drops both the
         // `surface-1` tint and the blur. The hover/focus tint has to go with
