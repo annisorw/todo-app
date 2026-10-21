@@ -244,3 +244,16 @@
     transition-property: opacity, background-color, color !important;
   }
 }
+
+/* ---- TaskRow hover lift opt-out (spec 3.11, spec 5) ----------------------- */
+/* The blanket rule above only changes how a transition runs; `.task-row:hover`'s
+ * `translate` is a static value, not an animation, so it would still apply
+ * instantly. Spec 5 calls for the 1px lift to be absent under reduced motion,
+ * not merely unanimated, so it gets its own override. Unlayered, like the
+ * other class-targeted rules in this file, so it beats the Tailwind utility
+ * regardless of source order. */
+@media (prefers-reduced-motion: reduce) {
+  .task-row:hover {
+    translate: 0 0;
+  }
+}

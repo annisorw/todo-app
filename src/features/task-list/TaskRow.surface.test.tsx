@@ -132,6 +132,21 @@ describe('TaskRow surface (design-spec 3.11)', () => {
     expect(row.className).toContain('hover:bg-surface-2')
     expect(row.className).toContain('focus-within:bg-surface-2')
   })
+
+  it('rises 1px and moves to --shadow-sm on hover, per 3.11 and the concept-a mock (FELA-180)', () => {
+    stubMatchMedia(false)
+    const row = rowOf(renderRow().container)
+    expect(row.className).toContain('hover:-translate-y-px')
+    expect(row.className).toContain('hover:shadow-sm')
+  })
+
+  it('transitions more than colour, so the hover lift and shadow actually animate (FELA-180)', () => {
+    stubMatchMedia(false)
+    const row = rowOf(renderRow().container)
+    const classes = row.className.split(/\s+/)
+    expect(classes).not.toContain('transition-colors')
+    expect(classes).toContain('transition')
+  })
 })
 
 describe('TaskRow stacking while a popup inside it is open (design-spec 2.9, criterion 30)', () => {
