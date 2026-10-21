@@ -33,7 +33,7 @@ export function Composer() {
     <>
       <div
         className={cn(
-          'hidden rounded-(--radius-xl) border bg-surface-1 p-(--space-5) transition-shadow duration-(--duration-fast) ease-standard sm:block',
+          'composer hidden rounded-(--radius-xl) border bg-surface-1 p-(--space-5) transition-shadow duration-(--duration-fast) ease-standard sm:block',
           form.error ? 'border-danger' : 'border-transparent',
           form.isFocused ? 'shadow-glow-accent' : 'shadow-sm',
         )}

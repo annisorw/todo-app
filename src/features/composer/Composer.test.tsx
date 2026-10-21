@@ -164,6 +164,13 @@ describe('Composer', () => {
     expect(panel).toHaveClass('border-danger', 'shadow-glow-accent')
   })
 
+  it('carries the .composer class on the glass panel (spec 2.7 fallback hook)', () => {
+    const { container } = renderComposer()
+
+    const panel = container.querySelector('[class*="radius-xl"]')
+    expect(panel).toHaveClass('composer')
+  })
+
   it('on mobile, the Fab opens a bottom sheet with the same form, autofocused', async () => {
     const user = userEvent.setup()
     renderComposer()
