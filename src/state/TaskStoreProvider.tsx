@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { announce } from '../lib/announce'
 import type { TaskDraft, TaskPatch } from '../domain/task'
@@ -50,15 +50,26 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'task/remove', id })
   }, [])
 
+  // `restoreRemoved`'s only real caller today is the undo toast's `onAction`,
+  // bound once at push time (`TaskList.handleRemove`) — that closure would
+  // otherwise freeze `state.lastRemoved` at the render before the removal,
+  // so the announcement either stays silent or names the wrong task. Read
+  // the current value through a ref instead, kept fresh via effect (same
+  // fix as `TaskList`'s own `lastRemovedRef`, against the same problem).
+  const lastRemovedRef = useRef(state.lastRemoved)
+  useEffect(() => {
+    lastRemovedRef.current = state.lastRemoved
+  }, [state.lastRemoved])
+
   // Centralized here, not at each caller (the undo toast's "Вернуть" today,
   // a future `Ctrl/Cmd+Z` shortcut per design-spec 6.3 tomorrow) — one
   // dispatch, one announcement, no risk of the two call sites doubling up.
   const restoreRemoved = useCallback(() => {
-    if (state.lastRemoved !== null) {
-      announce(`Задача восстановлена: «${state.lastRemoved.task.title}»`)
+    if (lastRemovedRef.current !== null) {
+      announce(`Задача восстановлена: «${lastRemovedRef.current.task.title}»`)
     }
     dispatch({ type: 'task/restoreRemoved' })
-  }, [state.lastRemoved])
+  }, [])
 
   const moveTask = useCallback((from: number, to: number) => {
     dispatch({ type: 'task/move', from, to })
