@@ -199,6 +199,11 @@ export function TaskRow({
 
   function handleTouchStart(event: TouchEvent<HTMLDivElement>) {
     if (isDesktop) return
+    // The "more" button is nested inside this same touch-handling container,
+    // so a press-and-hold on it bubbles up and would otherwise also arm the
+    // row's long-press gesture; its own click handler already opens the menu,
+    // and the gesture firing too closes what the click just opened.
+    if (moreRef.current?.contains(event.target as Node)) return
     const touch = event.touches[0]
     touchStartX.current = touch?.clientX ?? null
     touchStartY.current = touch?.clientY ?? null
@@ -504,6 +509,7 @@ function RowBody({
             icon={<MoreIcon />}
             aria-label={`Действия с задачей: ${task.title}`}
             aria-haspopup="menu"
+            aria-expanded={menuOpen}
             tabIndex={tabIndex}
             onClick={() => setMenuOpen(!menuOpen)}
           />
@@ -522,6 +528,7 @@ function RowBody({
             icon={<MoreIcon />}
             aria-label={`Действия с задачей: ${task.title}`}
             aria-haspopup="menu"
+            aria-expanded={menuOpen}
             tabIndex={tabIndex}
             onClick={onMobileMenuButtonClick}
           />

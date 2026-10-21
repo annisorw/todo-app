@@ -692,5 +692,37 @@ describe('TaskList', () => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument()
       expect(screen.getByRole('checkbox')).toHaveFocus()
     })
+
+    it('does not arm the long-press gesture when press-and-hold happens on the "more" button itself (FELA-167 regression)', () => {
+      vi.useFakeTimers()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ })
+
+      fireEvent.touchStart(moreButton, { touches: [{ clientX: 350, clientY: 50 }] })
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      fireEvent.touchEnd(moreButton, { changedTouches: [{ clientX: 350, clientY: 50 }] })
+      fireEvent.click(moreButton)
+
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+    })
+
+    it('still opens the menu on a long press over the row body, outside the "more" button (FELA-167 regression)', () => {
+      vi.useFakeTimers()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const row = screen.getByText('Купить молоко').closest('.task-row')
+      if (row === null) throw new Error('row not found')
+
+      fireEvent.touchStart(row, { touches: [{ clientX: 200, clientY: 50 }] })
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      fireEvent.touchEnd(row, { changedTouches: [{ clientX: 200, clientY: 50 }] })
+
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+    })
   })
 })
