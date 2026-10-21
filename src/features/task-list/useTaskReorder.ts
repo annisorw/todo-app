@@ -9,7 +9,8 @@ import { announce } from '../../lib/announce'
  * so the list has exactly one way to write its order.
  *
  * The mouse path is Framer Motion's `Reorder.Group`: it hands over a whole
- * reordered array, which `diffMove` reads back as one from→to pair. The
+ * reordered array, which `diffMove` reads back as one from→to pair — told
+ * which row the pointer is holding, because the array alone cannot say. The
  * keyboard path is the grab mode on the `DragHandle`: `Space` grabs, `↑`/`↓`
  * step, `Space` drops, `Esc` puts the row back. Every keyboard step goes
  * through `LiveRegion` (acceptance criteria 22–23).
@@ -42,6 +43,16 @@ export interface TaskReorder {
   grabbedId: string | null
   /** `Reorder.Group`'s `onReorder` — the pointer path. */
   handleReorder: (nextIds: string[]) => void
+  /**
+   * `Reorder.Item`'s `onDragStart` — names the row the pointer picked up.
+   *
+   * Which row moved is not a question the reordered array can answer (see
+   * `diffMove`), and the drag already knows. Without this the pointer and
+   * the keyboard write *different* store orders for the same visible gesture.
+   */
+  handleDragStart: (id: string) => void
+  /** `Reorder.Item`'s `onDragEnd` — forgets the row, so no later reorder claims it. */
+  handleDragEnd: () => void
   /** `DragHandle`'s `onKeyDown` — the grab mode (`Space`, `↑`/`↓`, `Esc`). */
   handleHandleKeyDown: (event: KeyboardEvent, id: string) => void
   /** `DragHandle`'s `onBlur` — drops the lifted look when focus leaves. */
@@ -56,6 +67,36 @@ export interface TaskReorder {
   moveRow: (id: string, delta: -1 | 1) => void
 }
 
+/** `ids` after the same splice-move `task/move` makes — for reading a result off before it is dispatched. */
+function withMove(ids: readonly string[], from: number, to: number): string[] {
+  const next = [...ids]
+  const [moved] = next.splice(from, 1)
+  if (moved !== undefined) next.splice(to, 0, moved)
+  return next
+}
+
+/** Everything strictly between `first` and `last` shifted one slot up. */
+function shiftsUp(
+  before: readonly string[],
+  after: readonly string[],
+  first: number,
+  last: number,
+): boolean {
+  for (let i = first; i < last; i += 1) if (after[i] !== before[i + 1]) return false
+  return true
+}
+
+/** Everything strictly between `first` and `last` shifted one slot down. */
+function shiftsDown(
+  before: readonly string[],
+  after: readonly string[],
+  first: number,
+  last: number,
+): boolean {
+  for (let i = first + 1; i <= last; i += 1) if (after[i] !== before[i - 1]) return false
+  return true
+}
+
 /**
  * The one move a reordered array represents, as a pair of display indices.
  *
@@ -64,13 +105,24 @@ export interface TaskReorder {
  * action as the keyboard path (point 5 of [FELA-17](/FELA/issues/FELA-17))
  * instead of giving the list a second way to write its order.
  *
+ * Two neighbours swapping is *two* moves with one array: `[a,c] → [c,a]` is
+ * both "a moved down" and "c moved up". Same rows on screen, different
+ * `task/move` — as soon as a row the list doesn't render sits between them,
+ * the two writes put the hidden row on opposite sides. So the move cannot be
+ * read out of the arrays alone: `movedId` is the row the pointer actually
+ * held (`handleDragStart`), and the branch that moves *it* is the answer.
+ * Without it the tie goes to "moved down", which is only safe when nothing
+ * is hidden.
+ *
  * Anything that is not exactly one element moved — equal arrays, different
- * lengths, two unrelated swaps — returns `null` and is ignored: guessing at
- * a multi-element diff would silently reorder rows nobody touched.
+ * lengths, two unrelated swaps, or a single move of some row other than
+ * `movedId` — returns `null` and is ignored: guessing at a multi-element
+ * diff would silently reorder rows nobody touched.
  */
 export function diffMove(
   before: readonly string[],
   after: readonly string[],
+  movedId?: string,
 ): { from: number; to: number } | null {
   if (before.length !== after.length) return null
 
@@ -82,25 +134,28 @@ export function diffMove(
   let last = before.length - 1
   while (last > first && before[last] === after[last]) last -= 1
 
+  const readings: { from: number; to: number }[] = []
   // Moved down: the element at `first` now sits at `last`, and everything
   // that was between them shifted one slot up.
-  if (after[last] === before[first]) {
-    for (let i = first; i < last; i += 1) if (after[i] !== before[i + 1]) return null
-    return { from: first, to: last }
+  if (after[last] === before[first] && shiftsUp(before, after, first, last)) {
+    readings.push({ from: first, to: last })
   }
-
   // Moved up: the element at `last` now sits at `first`, and everything
   // that was between them shifted one slot down.
-  if (after[first] === before[last]) {
-    for (let i = first + 1; i <= last; i += 1) if (after[i] !== before[i - 1]) return null
-    return { from: last, to: first }
+  if (after[first] === before[last] && shiftsDown(before, after, first, last)) {
+    readings.push({ from: last, to: first })
   }
 
-  return null
+  if (movedId !== undefined) return readings.find((move) => before[move.from] === movedId) ?? null
+  return readings[0] ?? null
 }
 
 /**
- * Where `Esc` puts a held row back (design-spec 6.4), as a display index.
+ * Where `Esc` puts a held row back (design-spec 6.4), as an index into the
+ * same array `originPrevId` was read from — which is the **store** order,
+ * `tasks`, not the display list. Restoring the visible order is not enough:
+ * every step of the grab jumps whatever the list doesn't render, so a row put
+ * back one visible slot can still have crossed a hidden one for good.
  *
  * The origin is remembered as *the row it sat behind*, not as the index it
  * sat at: the list can be re-filtered or re-searched while the row is held,
@@ -126,8 +181,11 @@ export function resolveOrigin(
 
 export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions): TaskReorder {
   const [grabbedId, setGrabbedId] = useState<string | null>(null)
-  // The row the held one sat behind when it was lifted — see `resolveOrigin`.
+  // The row the held one sat behind in the **store** when it was lifted —
+  // see `resolveOrigin`.
   const originPrevId = useRef<string | null>(null)
+  // The row the pointer is dragging right now — see `handleDragStart`.
+  const pointerDragId = useRef<string | null>(null)
 
   // A held row can leave the list under us: filtered out, searched away,
   // deleted. Focus never left the handle, so no `blur` arrives to clear the
@@ -170,9 +228,20 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
     [ids, tasks, moveTask],
   )
 
+  const handleDragStart = useCallback((id: string) => {
+    pointerDragId.current = id
+  }, [])
+
+  const handleDragEnd = useCallback(() => {
+    pointerDragId.current = null
+  }, [])
+
   const handleReorder = useCallback(
     (nextIds: string[]) => {
-      const move = diffMove(ids, nextIds)
+      // `Reorder.Group` only reports while a drag is in flight, so the id is
+      // there; `undefined` would fall back to reading the move out of the
+      // arrays, which is ambiguous for two neighbours (see `diffMove`).
+      const move = diffMove(ids, nextIds, pointerDragId.current ?? undefined)
       if (move === null) return
       applyMove(move.from, move.to)
     },
@@ -212,7 +281,12 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
         // Another row is still held — one grab at a time.
         if (held !== null) return
 
-        originPrevId.current = index > 0 ? (ids[index - 1] ?? null) : null
+        const storeIndex = tasks.findIndex((task) => task.id === id)
+        // A rendered row is always in the store; nothing to put back if it
+        // somehow is not, so it does not get lifted either.
+        if (storeIndex === -1) return
+
+        originPrevId.current = storeIndex > 0 ? (tasks[storeIndex - 1]?.id ?? null) : null
         setGrabbedId(id)
         announce(`Задача «${titleOf(id)}» поднята, позиция ${index + 1} из ${ids.length}`)
         return
@@ -225,10 +299,24 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
 
       if (event.key === 'Escape') {
         event.preventDefault()
-        const origin = resolveOrigin(ids, index, originPrevId.current)
-        applyMove(index, origin)
         setGrabbedId(null)
-        announce(`Перемещение отменено, позиция ${origin + 1}`)
+
+        // Cancelling is the one move measured in store indices. Every step of
+        // the grab was a *visible* step that jumped whatever sits hidden
+        // between the rows, so undoing the visible steps would leave the row
+        // on the far side of those hidden tasks for good.
+        const storeIds = tasks.map((task) => task.id)
+        const storeFrom = storeIds.indexOf(id)
+        if (storeFrom === -1) return
+        const storeTo = resolveOrigin(storeIds, storeFrom, originPrevId.current)
+        if (storeTo !== storeFrom) moveTask(storeFrom, storeTo)
+
+        // Announced in the visible terms the person is reading the list in:
+        // the restored store order, minus the rows this list doesn't render.
+        const restored = withMove(storeIds, storeFrom, storeTo).filter((candidate) =>
+          ids.includes(candidate),
+        )
+        announce(`Перемещение отменено, позиция ${restored.indexOf(id) + 1}`)
         return
       }
 
@@ -240,7 +328,7 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
       if (to < 0 || to >= ids.length) return
       if (applyMove(index, to)) announce(`Позиция ${to + 1} из ${ids.length}`)
     },
-    [ids, held, applyMove, titleOf],
+    [ids, tasks, held, applyMove, moveTask, titleOf],
   )
 
   const handleHandleBlur = useCallback((id: string) => {
@@ -253,6 +341,8 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
   return {
     grabbedId: held,
     handleReorder,
+    handleDragStart,
+    handleDragEnd,
     handleHandleKeyDown,
     handleHandleBlur,
     moveRow,

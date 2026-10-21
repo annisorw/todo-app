@@ -19,6 +19,20 @@ describe('diffMove', () => {
     expect(diffMove(['a', 'b', 'c'], ['b', 'a', 'c'])).toEqual({ from: 0, to: 1 })
   })
 
+  it('lets the row that was dragged settle an adjacent swap', () => {
+    // The two readings of `['a','c'] → ['c','a']` are "a moved down" and "c
+    // moved up". They are the same display order and *different* store
+    // writes as soon as a hidden task sits between the two, so the answer
+    // has to come from the drag itself, not from the array.
+    expect(diffMove(['a', 'c'], ['c', 'a'], 'c')).toEqual({ from: 1, to: 0 })
+    expect(diffMove(['a', 'c'], ['c', 'a'], 'a')).toEqual({ from: 0, to: 1 })
+  })
+
+  it('refuses a diff that does not move the row that was dragged', () => {
+    expect(diffMove(['a', 'b', 'c'], ['b', 'c', 'a'], 'b')).toBeNull()
+    expect(diffMove(['a', 'b', 'c'], ['b', 'a', 'c'], 'c')).toBeNull()
+  })
+
   it('reads a one-step swap at the tail of the list', () => {
     expect(diffMove(['a', 'b', 'c'], ['a', 'c', 'b'])).toEqual({ from: 1, to: 2 })
   })
@@ -80,11 +94,12 @@ describe('useTaskReorder grab mode', () => {
   const keyEvent = (key: string) =>
     ({ key, preventDefault: () => undefined }) as unknown as KeyboardEvent
 
-  let unsubscribe: (() => void) | null = null
+  // One per `setup` — a test that compares two paths builds two lists.
+  const unsubscribes: (() => void)[] = []
 
   afterEach(() => {
-    unsubscribe?.()
-    unsubscribe = null
+    for (const unsubscribe of unsubscribes) unsubscribe()
+    unsubscribes.length = 0
   })
 
   function setup(initial: string[]) {
@@ -100,9 +115,11 @@ describe('useTaskReorder grab mode', () => {
     }
 
     let announced = ''
-    unsubscribe = subscribeToAnnouncements((message) => {
-      announced = message
-    })
+    unsubscribes.push(
+      subscribeToAnnouncements((message) => {
+        announced = message
+      }),
+    )
 
     const { result, rerender } = renderHook(
       ({ ids }: { ids: string[] }) => useTaskReorder({ tasks, ids, moveTask }),
@@ -120,6 +137,22 @@ describe('useTaskReorder grab mode', () => {
       press(key: string, id: string) {
         act(() => {
           result.current.handleHandleKeyDown(keyEvent(key), id)
+        })
+        sync()
+      },
+      /** The pointer path end to end: pick `id` up, drop the list in `nextIds`. */
+      drag(id: string, nextIds: string[]) {
+        act(() => {
+          result.current.handleDragStart(id)
+          result.current.handleReorder(nextIds)
+          result.current.handleDragEnd()
+        })
+        sync()
+      },
+      /** The `Ctrl/Cmd+↑/↓` path: one step, by id. */
+      step(id: string, delta: -1 | 1) {
+        act(() => {
+          result.current.moveRow(id, delta)
         })
         sync()
       },
@@ -163,6 +196,40 @@ describe('useTaskReorder grab mode', () => {
     list.show('a')
     expect(list.displayIds()).toEqual(['a', 'b'])
     expect(list.result.current.grabbedId).toBeNull()
+  })
+
+  // The active list never renders a completed task, so "a hidden row between
+  // two visible ones" is the ordinary state of any list with something ticked
+  // off — not a filter edge case. These two fixtures are the ones where a
+  // display index and a store index part ways.
+  it('writes the same store order for the same one-step gesture, by pointer and by key', () => {
+    const byPointer = setup(['a', 'h', 'c'])
+    byPointer.hide('h')
+    byPointer.drag('c', ['c', 'a'])
+
+    const byKey = setup(['a', 'h', 'c'])
+    byKey.hide('h')
+    byKey.step('c', -1)
+
+    // `c` jumped the row it passed *and* the hidden one between them, which
+    // is where it visibly landed; `h` keeps its place behind `a`.
+    expect(byPointer.order()).toEqual(['c', 'a', 'h'])
+    expect(byKey.order()).toEqual(byPointer.order())
+  })
+
+  it('Esc restores the whole store order, not just the visible one', () => {
+    const list = setup(['a', 'h', 'c'])
+    list.hide('h')
+
+    list.press(' ', 'a')
+    list.press('ArrowDown', 'a')
+    expect(list.order()).toEqual(['h', 'c', 'a'])
+
+    list.press('Escape', 'a')
+
+    expect(list.order()).toEqual(['a', 'h', 'c'])
+    expect(list.displayIds()).toEqual(['a', 'c'])
+    expect(list.announced()).toBe('Перемещение отменено, позиция 1')
   })
 
   it('Esc returns the row to its neighbour, not to a stale index', () => {

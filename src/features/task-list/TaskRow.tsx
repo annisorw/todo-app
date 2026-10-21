@@ -53,6 +53,15 @@ export interface TaskRowReorder {
   isGrabbed: boolean
   onHandleKeyDown: (event: KeyboardEvent) => void
   onHandleBlur: () => void
+  /**
+   * The pointer picked this row up / put it down. `useTaskReorder` needs the
+   * id to turn `Reorder.Group`'s reordered array into the one move it stands
+   * for: with a row hidden between two visible ones, "the one above moved
+   * down" and "the one below moved up" are the same array and different
+   * orders.
+   */
+  onDragStart: () => void
+  onDragEnd: () => void
 }
 
 export interface TaskRowProps {
@@ -465,8 +474,14 @@ export function TaskRow({
       // move a task. A zero-duration layout transition looks the same —
       // instant.
       layout
-      onDragStart={() => setIsDragging(true)}
-      onDragEnd={() => setIsDragging(false)}
+      onDragStart={() => {
+        setIsDragging(true)
+        reorder.onDragStart()
+      }}
+      onDragEnd={() => {
+        setIsDragging(false)
+        reorder.onDragEnd()
+      }}
       className={cn(shellClassName, lifted && 'z-(--z-drag)')}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}

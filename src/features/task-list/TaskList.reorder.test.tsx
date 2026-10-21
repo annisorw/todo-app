@@ -209,6 +209,57 @@ describe('TaskList reordering', () => {
     })
   })
 
+  /**
+   * The active list never renders a completed task, so a store order with a
+   * done task *between* two active ones is the ordinary state of any list
+   * with something ticked off. Display index and store index part ways there,
+   * and only the store order says which of the two a move actually wrote —
+   * hence `readTasks()` rather than `renderedOrder()` in both tests.
+   */
+  describe('a completed task between the visible rows', () => {
+    function makeWithCompletedBetween(): Task[] {
+      return [
+        makeTask({ id: 't1', title: 'Первая' }),
+        makeTask({ id: 't2', title: 'Готовая', completedAt: '2026-10-20T10:00:00.000Z' }),
+        makeTask({ id: 't3', title: 'Третья' }),
+      ]
+    }
+
+    /** The whole store order as it reached `localStorage`. */
+    function storedOrder(): string[] {
+      act(() => {
+        vi.advanceTimersByTime(PERSIST_DEBOUNCE_MS)
+      })
+      return readTasks().tasks.map((task) => task.title)
+    }
+
+    it('moves the row past the hidden task it visibly jumped, and no further', () => {
+      vi.useFakeTimers()
+      renderTaskList(makeWithCompletedBetween())
+      expect(renderedOrder()).toEqual(['Первая', 'Третья'])
+
+      fireEvent.keyDown(handleFor('Третья'), { key: 'ArrowUp', ctrlKey: true })
+
+      expect(renderedOrder()).toEqual(['Третья', 'Первая'])
+      expect(storedOrder()).toEqual(['Третья', 'Первая', 'Готовая'])
+    })
+
+    it('puts the whole store order back on Esc, not only the visible one', () => {
+      vi.useFakeTimers()
+      renderTaskList(makeWithCompletedBetween())
+
+      fireEvent.keyDown(handleFor('Первая'), { key: ' ' })
+      fireEvent.keyDown(handleFor('Первая'), { key: 'ArrowDown' })
+      expect(renderedOrder()).toEqual(['Третья', 'Первая'])
+
+      fireEvent.keyDown(handleFor('Первая'), { key: 'Escape' })
+
+      expect(renderedOrder()).toEqual(['Первая', 'Третья'])
+      expect(announcement()).toBe('Перемещение отменено, позиция 1')
+      expect(storedOrder()).toEqual(['Первая', 'Готовая', 'Третья'])
+    })
+  })
+
   describe('persistence (acceptance criterion 9)', () => {
     it('keeps the new order through a reload', () => {
       vi.useFakeTimers()

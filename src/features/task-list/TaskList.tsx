@@ -273,6 +273,8 @@ export function TaskList({
                     handleCtrlArrow(event, task)
                   },
                   onHandleBlur: () => reorder.handleHandleBlur(task.id),
+                  onDragStart: () => reorder.handleDragStart(task.id),
+                  onDragEnd: reorder.handleDragEnd,
                 }}
               />
             ))}
