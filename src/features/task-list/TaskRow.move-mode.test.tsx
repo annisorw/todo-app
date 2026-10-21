@@ -100,7 +100,7 @@ function enterMoveMode(title: string) {
  * design-spec 3.14 / 3.15 / 6.4 as rewritten in v1.10, acceptance criteria
  * 44–46 ([FELA-177](/FELA/issues/FELA-177)): the mobile row drops its
  * permanent `DragHandle`, and moving a task without dragging goes through the
- * `Menu` and the on-screen ↑ / ↓ / «Готово» strip.
+ * `Menu` and the on-screen ↑ / ↓ / «Готово» / «Отмена» strip.
  *
  * `fireEvent` rather than `userEvent`: the persist assertions run on fake
  * timers, under which `userEvent`'s internal delay never resolves.
@@ -186,9 +186,9 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
 
       enterMoveMode('Первая')
 
-      const up = screen.getByRole('button', { name: 'Переместить выше: Первая' })
+      const up = screen.getByRole('button', { name: 'Переместить вверх: Первая' })
       expect(document.activeElement).toBe(up)
-      expect(screen.getByRole('button', { name: 'Переместить ниже: Первая' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Переместить вниз: Первая' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Готово' })).toBeInTheDocument()
       // The visible chip is what the strip replaces. The row's `sr-only`
       // copy — the one `aria-labelledby` points at — stays, so the task keeps
@@ -204,7 +204,7 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
 
       expect(screen.getAllByRole('button', { name: /^Готово$/ })).toHaveLength(1)
       expect(
-        screen.getByRole('button', { name: 'Переместить выше: Вторая' }),
+        screen.getByRole('button', { name: 'Переместить вверх: Вторая' }),
       ).toBeInTheDocument()
     })
   })
@@ -214,7 +214,7 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
       renderTaskList(makeThree())
 
       enterMoveMode('Вторая')
-      fireEvent.click(screen.getByRole('button', { name: 'Переместить выше: Вторая' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить вверх: Вторая' }))
 
       expect(renderedOrder()).toEqual(['Вторая', 'Первая', 'Третья'])
       expect(announcement()).toBe('Позиция 1 из 3')
@@ -224,11 +224,11 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
       renderTaskList(makeThree())
 
       enterMoveMode('Вторая')
-      fireEvent.click(screen.getByRole('button', { name: 'Переместить ниже: Вторая' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить вниз: Вторая' }))
       expect(renderedOrder()).toEqual(['Первая', 'Третья', 'Вторая'])
       expect(announcement()).toBe('Позиция 3 из 3')
 
-      fireEvent.click(screen.getByRole('button', { name: 'Переместить ниже: Вторая' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить вниз: Вторая' }))
       expect(renderedOrder()).toEqual(['Первая', 'Третья', 'Вторая'])
       expect(announcement()).toBe('Позиция 3 из 3')
     })
@@ -237,7 +237,7 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
       renderTaskList(makeThree())
 
       enterMoveMode('Вторая')
-      fireEvent.click(screen.getByRole('button', { name: 'Переместить выше: Вторая' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить вверх: Вторая' }))
       fireEvent.click(screen.getByRole('button', { name: 'Готово' }))
 
       expect(renderedOrder()).toEqual(['Вторая', 'Первая', 'Третья'])
@@ -255,7 +255,7 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
       renderTaskList(makeThree())
 
       enterMoveMode('Третья')
-      fireEvent.click(screen.getByRole('button', { name: 'Переместить выше: Третья' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить вверх: Третья' }))
       fireEvent.click(screen.getByRole('button', { name: 'Готово' }))
 
       act(() => {
@@ -266,15 +266,70 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
     })
   })
 
+  /**
+   * criterion 46 as rewritten in v1.10: both outcomes have to be reachable
+   * from the screen. `Esc` is the second path to the cancel, not the only
+   * one — a phone has no `Esc` key at all.
+   */
+  describe('cancelling from the screen (criterion 46)', () => {
+    it('offers exactly four controls, with 6.4’s names and in its order', () => {
+      renderTaskList(makeThree())
+
+      enterMoveMode('Вторая')
+
+      const strip = screen.getByRole('button', { name: 'Переместить вверх: Вторая' })
+        .parentElement as HTMLElement
+      expect(
+        Array.from(strip.querySelectorAll('button')).map(
+          (button) => button.getAttribute('aria-label') ?? button.textContent,
+        ),
+      ).toEqual(['Переместить вверх: Вторая', 'Переместить вниз: Вторая', 'Готово', 'Отмена'])
+    })
+
+    it('«Отмена» restores the order, announces it and returns focus to `more`', () => {
+      renderTaskList(makeThree())
+
+      enterMoveMode('Первая')
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить вниз: Первая' }))
+      expect(renderedOrder()).toEqual(['Вторая', 'Первая', 'Третья'])
+
+      fireEvent.click(screen.getByRole('button', { name: 'Отмена' }))
+
+      expect(renderedOrder()).toEqual(['Первая', 'Вторая', 'Третья'])
+      expect(announcement()).toBe('Перемещение отменено, позиция 1')
+      expect(document.activeElement).toBe(moreFor('Первая'))
+      expect(screen.queryByRole('button', { name: 'Готово' })).not.toBeInTheDocument()
+    })
+
+    it('leaves the stored order as it was before the mode was entered', () => {
+      vi.useFakeTimers()
+      renderTaskList(makeThree())
+
+      enterMoveMode('Первая')
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить вниз: Первая' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Отмена' }))
+
+      act(() => {
+        vi.advanceTimersByTime(PERSIST_DEBOUNCE_MS)
+      })
+
+      expect(readTasks().tasks.map((task) => task.title)).toEqual([
+        'Первая',
+        'Вторая',
+        'Третья',
+      ])
+    })
+  })
+
   describe('cancelling with Esc (criterion 46)', () => {
     it('restores the original order, announces it and returns focus to `more`', () => {
       renderTaskList(makeThree())
 
       enterMoveMode('Первая')
-      fireEvent.click(screen.getByRole('button', { name: 'Переместить ниже: Первая' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить вниз: Первая' }))
       expect(renderedOrder()).toEqual(['Вторая', 'Первая', 'Третья'])
 
-      fireEvent.keyDown(screen.getByRole('button', { name: 'Переместить ниже: Первая' }), {
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Переместить вниз: Первая' }), {
         key: 'Escape',
       })
 
@@ -289,8 +344,8 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
       renderTaskList(makeThree())
 
       enterMoveMode('Первая')
-      fireEvent.click(screen.getByRole('button', { name: 'Переместить ниже: Первая' }))
-      fireEvent.keyDown(screen.getByRole('button', { name: 'Переместить ниже: Первая' }), {
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить вниз: Первая' }))
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Переместить вниз: Первая' }), {
         key: 'Escape',
       })
 
@@ -318,7 +373,7 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
       renderTaskList(makeThree())
 
       enterMoveMode('Первая')
-      fireEvent.click(screen.getByRole('button', { name: 'Переместить ниже: Первая' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить вниз: Первая' }))
       expect(renderedOrder()).toEqual(['Вторая', 'Первая', 'Третья'])
 
       fireEvent.keyDown(handleFor('Первая'), { key: 'Escape' })
@@ -332,7 +387,7 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
       renderTaskList(makeThree())
 
       enterMoveMode('Первая')
-      fireEvent.click(screen.getByRole('button', { name: 'Переместить ниже: Первая' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить вниз: Первая' }))
 
       fireEvent.keyDown(handleFor('Первая'), { key: ' ' })
 
@@ -345,7 +400,7 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
   /**
    * The list is one Tab stop: exactly one row carries `tabIndex={0}` and every
    * control in the others is `-1`. The strip is part of its row and has to
-   * obey that, or Tab out of «Готово» would skip the `more` button the mode
+   * obey that, or Tab out of the strip would skip the `more` button the mode
    * returns focus to.
    */
   describe('roving focus (architecture invariant)', () => {
@@ -354,7 +409,12 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
 
       enterMoveMode('Вторая')
 
-      for (const name of ['Переместить выше: Вторая', 'Переместить ниже: Вторая', 'Готово']) {
+      for (const name of [
+        'Переместить вверх: Вторая',
+        'Переместить вниз: Вторая',
+        'Готово',
+        'Отмена',
+      ]) {
         expect(screen.getByRole('button', { name }).getAttribute('tabindex')).toBe('0')
       }
       expect(moreFor('Вторая').getAttribute('tabindex')).toBe('0')

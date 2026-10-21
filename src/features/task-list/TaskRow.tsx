@@ -66,7 +66,7 @@ export interface TaskRowReorder {
   /**
    * design-spec 6.4's four intents, straight off `useTaskReorder`. The mobile
    * move mode drives the same transitions from the `Menu` item and the on-screen
-   * ↑ / ↓ / «Готово» strip that the keyboard mode drives from keys, so both
+   * ↑ / ↓ / «Готово» / «Отмена» strip that the keyboard mode drives from keys, so both
    * announce the same words without this component restating any of them.
    */
   onGrab: () => void
@@ -351,9 +351,10 @@ export function TaskRow({
   }, [moveMode])
 
   /**
-   * Both of 6.4's outcomes — «Готово» commits where the row stands, `Esc`
-   * puts it back — and the one focus rule they share: whichever way the mode
-   * ends, focus returns to the `more` button of the same row.
+   * Both of 6.4's outcomes — «Готово» commits where the row stands,
+   * «Отмена» (or `Esc`, its second path) puts it back — and the one focus
+   * rule they share: whichever way the mode ends, focus returns to the
+   * `more` button of the same row.
    */
   function exitMoveMode(commit: boolean) {
     if (reorder === undefined) return
@@ -429,6 +430,7 @@ export function TaskRow({
       moveUpRef={moveUpRef}
       onMoveStep={(delta) => reorder?.onStep(delta)}
       onMoveDone={() => exitMoveMode(true)}
+      onMoveCancel={() => exitMoveMode(false)}
       menuOpen={menuOpen}
       setMenuOpen={setMenuOpen}
       menuAnchorRef={menuAnchorRef}
@@ -628,11 +630,12 @@ interface RowBodyProps {
   onOpenEditor: () => void
   onQuickChange: (patch: TaskPatch) => void
   moreRef: RefObject<HTMLButtonElement | null>
-  /** design-spec 6.4 — this row is held on mobile, so it shows the ↑ / ↓ / «Готово» strip instead of its meta chips. */
+  /** design-spec 6.4 — this row is held on mobile, so it shows the ↑ / ↓ / «Готово» / «Отмена» strip instead of its meta chips. */
   moveMode: boolean
   moveUpRef: RefObject<HTMLButtonElement | null>
   onMoveStep: (delta: -1 | 1) => void
   onMoveDone: () => void
+  onMoveCancel: () => void
   menuOpen: boolean
   setMenuOpen: (value: boolean) => void
   menuAnchorRef: RefObject<HTMLElement | null>
@@ -671,6 +674,7 @@ function RowBody({
   moveUpRef,
   onMoveStep,
   onMoveDone,
+  onMoveCancel,
   menuOpen,
   setMenuOpen,
   menuAnchorRef,
@@ -698,6 +702,11 @@ function RowBody({
       transition={{ duration: prefersReducedMotion ? 0 : DRAG_LIFT_S, ease: EASE_STANDARD }}
       className={cn(
         'task-row group flex min-h-(--layout-row-h) items-center gap-(--space-3) rounded-(--radius-lg) border px-(--space-2) transition-colors duration-(--duration-fast) ease-standard',
+        // design-spec 6.4 — only the move mode has a second line: the control
+        // strip is `basis-full`, so it needs the row to wrap. Without the
+        // mode the row must stay single-line, or a long title plus chips
+        // would push the buttons down.
+        moveMode && 'flex-wrap py-(--space-2)',
         // S8: an opaque fill, because a translucent card in flight reads
         // dirty over the rows it passes. The hover/focus tint has to go with
         // it — it is a later-ordered variant and would win otherwise.
@@ -749,47 +758,13 @@ function RowBody({
       <div className="min-w-0 flex-1">
         <ExpandableTitle task={task} query={query} titleId={titleId} />
 
-        {moveMode ? (
-          /*
-            design-spec 6.4 — the move mode's control strip, in the meta-chip
-            slot. The chips are `static` on mobile anyway (3.12/3.13), so
-            nothing interactive is hidden while the row is held. Each button
-            calls one of 6.4's intents; the announcements come from
-            `useTaskReorder`, so they are word-for-word the keyboard mode's.
-
-            `tabIndex` / `onFocus` are the row's, like every other control
-            here: the strip is part of its row, so the list stays one Tab stop
-            and focusing ↑ on entry moves the roving index onto this row —
-            without which `more`, the button 6.4 returns focus to, would stay
-            `-1` and Tab out of «Готово» would leave the list.
-          */
-          <div className="mt-(--space-1) flex items-center gap-(--space-2)">
-            <IconButton
-              ref={moveUpRef}
-              icon={<ArrowUpIcon />}
-              aria-label={`Переместить выше: ${task.title}`}
-              tabIndex={tabIndex}
-              onFocus={onFocus}
-              onClick={() => onMoveStep(-1)}
-            />
-            <IconButton
-              icon={<ArrowDownIcon />}
-              aria-label={`Переместить ниже: ${task.title}`}
-              tabIndex={tabIndex}
-              onFocus={onFocus}
-              onClick={() => onMoveStep(1)}
-            />
-            <Button
-              size="sm"
-              variant="secondary"
-              tabIndex={tabIndex}
-              onFocus={onFocus}
-              onClick={onMoveDone}
-            >
-              Готово
-            </Button>
-          </div>
-        ) : (
+        {/*
+          design-spec 6.4 — while the row is held, the meta chips give their
+          slot to the control strip. The strip itself is a child of the row,
+          not of this column: the column is 172px wide once the handle comes
+          back, and the strip needs the card's full inner width.
+        */}
+        {!moveMode && (
         <div className="mt-(--space-1) flex flex-wrap items-center gap-(--space-2)">
           {isDesktop ? (
             <PrioritySelect
@@ -876,6 +851,64 @@ function RowBody({
               <Menu items={menuItems} anchorRef={menuAnchorRef} onClose={() => setMenuOpen(false)} />
             </div>
           )}
+        </div>
+      )}
+
+      {moveMode && (
+        /*
+          design-spec 6.4 — the move mode's control strip. It takes the
+          meta-chip slot (the chips are `static` on mobile anyway, 3.12/3.13,
+          so nothing interactive is hidden while the row is held) but spans
+          the card's inner width: four controls need ~307px, and the title
+          column is down to 172px while the handle is back in the row.
+          `basis-full` is what makes the wrapping row give it its own line.
+
+          Each button calls one of 6.4's intents, so the announcements come
+          from `useTaskReorder` word-for-word as in the keyboard mode, and
+          both of 6.4's outcomes are reachable from the screen: «Готово»
+          commits, «Отмена» puts the row back. `Esc` is the second path to
+          the latter, not the only one — a phone has no `Esc`.
+
+          `tabIndex` / `onFocus` are the row's, like every other control
+          here: the strip is part of its row, so the list stays one Tab stop
+          and focusing ↑ on entry moves the roving index onto this row —
+          without which `more`, the button 6.4 returns focus to, would stay
+          `-1` and Tab out of the strip would leave the list.
+        */
+        <div className="mt-(--space-1) flex basis-full items-center gap-(--space-2)">
+          <IconButton
+            ref={moveUpRef}
+            icon={<ArrowUpIcon />}
+            aria-label={`Переместить вверх: ${task.title}`}
+            tabIndex={tabIndex}
+            onFocus={onFocus}
+            onClick={() => onMoveStep(-1)}
+          />
+          <IconButton
+            icon={<ArrowDownIcon />}
+            aria-label={`Переместить вниз: ${task.title}`}
+            tabIndex={tabIndex}
+            onFocus={onFocus}
+            onClick={() => onMoveStep(1)}
+          />
+          <Button
+            size="sm"
+            variant="primary"
+            tabIndex={tabIndex}
+            onFocus={onFocus}
+            onClick={onMoveDone}
+          >
+            Готово
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            tabIndex={tabIndex}
+            onFocus={onFocus}
+            onClick={onMoveCancel}
+          >
+            Отмена
+          </Button>
         </div>
       )}
     </motion.div>
