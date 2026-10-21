@@ -77,6 +77,11 @@ export function TaskEditorSheet({ task, onSave, onCancel }: TaskEditorSheetProps
     textareaRef.current?.focus()
   }, [])
 
+  // Grows with content up to the textarea's own `max-h` (CSS clamps the
+  // inline `height` we set here); past that it scrolls internally instead
+  // of pushing the panel past the viewport (FELA-133 — a near-limit title
+  // was rendering the sheet taller than the screen, with the panel's top
+  // and the textarea's own start scrolled off above the viewport).
   useEffect(() => {
     const node = textareaRef.current
     if (node === null) return
@@ -130,7 +135,7 @@ export function TaskEditorSheet({ task, onSave, onCancel }: TaskEditorSheetProps
         initial={prefersReducedMotion ? { opacity: 0 } : { y: '100%' }}
         animate={prefersReducedMotion ? { opacity: 1 } : { y: 0 }}
         transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-        className="relative flex flex-col gap-(--space-3) rounded-t-(--radius-xl) border-t border-surface-border bg-surface-2-solid p-(--space-5) pb-[calc(var(--space-5)+env(safe-area-inset-bottom))] shadow-lg"
+        className="relative flex max-h-[90dvh] flex-col gap-(--space-3) overflow-y-auto rounded-t-(--radius-xl) border-t border-surface-border bg-surface-2-solid p-(--space-5) pb-[calc(var(--space-5)+env(safe-area-inset-bottom))] shadow-lg"
       >
         <h2 className="text-h2 text-primary">Изменить задачу</h2>
 
@@ -143,7 +148,7 @@ export function TaskEditorSheet({ task, onSave, onCancel }: TaskEditorSheetProps
           aria-invalid={form.isTooLong || undefined}
           onChange={(event) => form.setTitle(event.target.value)}
           onKeyDown={form.handleTextareaKeyDown}
-          className="min-w-0 resize-none rounded-(--radius-md) border border-surface-border bg-surface-1 p-(--space-3) text-body text-primary"
+          className="min-w-0 max-h-[40dvh] resize-none overflow-y-auto break-words rounded-(--radius-md) border border-surface-border bg-surface-1 p-(--space-3) text-body text-primary"
         />
 
         <div className="flex items-center justify-between gap-(--space-3)">
