@@ -19,9 +19,9 @@ import { describe, expect, it } from 'vitest'
  *    a later class-targeted rule or Tailwind utility must win without
  *    `!important`;
  * 2. both colours come from tokens, never a literal (criterion 1);
- * 3. the rule re-inherits `text-decoration-line`, because pinning `color` would
- *    otherwise hide a completed row's strikethrough under the backing
- *    (FELA-184);
+ * 3. the rule re-inherits `text-decoration-line`, because pinning `color`
+ *    otherwise leaves a completed row's strikethrough drawn in the dimmed
+ *    ancestor colour over the backing (FELA-184);
  * 4. the rule changes no metric that reflows the title. The highlight is
  *    recomputed on every keystroke, so a `font-weight` second channel or
  *    block-direction padding would make the heading jump under the cursor
@@ -79,14 +79,14 @@ describe('the <mark> rule', () => {
   })
 
   it('re-inherits the strikethrough that pinning `color` took away', () => {
-    // FELA-184. `text-decoration` is painted by the element that declares it,
-    // so the <p>'s line-through lands under the <mark> backing and vanishes
-    // over the matched fragment — on a completed task the highlighted word
-    // loses two of the three §7 channels. `inherit` makes <mark> paint the line
-    // itself, above its own background. Measured in Chromium on built `dist`:
-    // without this declaration getComputedStyle(mark).textDecorationLine is
-    // 'none' on a completed row, with it 'line-through', and the geometry of
-    // both <mark> and the title is unchanged.
+    // FELA-184. Without this declaration the line over the matched fragment is
+    // the <p>'s own: Chromium paints it above the translucent backing, but in
+    // `--color-text-tertiary` — 3.05:1 against the dark backing and 3.63:1
+    // against the light one, measured pixel by pixel on built `dist`. `inherit`
+    // makes <mark> paint the line itself in the pinned text colour, so the
+    // shipped pixels are rgb(244,244,251) / rgb(21,21,42) instead.
+    // getComputedStyle(mark).textDecorationLine goes 'none' -> 'line-through'
+    // and the geometry of both <mark> and the title is unchanged.
     expect(markRule()).toMatch(/text-decoration-line\s*:\s*inherit/)
   })
 
