@@ -51,15 +51,18 @@ function CheckIcon({ checked, animated }: { checked: boolean; animated: boolean 
  * 32/44 px target guidance, so the native input's hit area is the larger
  * 32×32 desktop / 44×44 mobile box, still above the 24×24 WCAG 2.2 floor
  * though smaller than `IconButton`'s 40/44, with the small circle centered
- * inside it. The input uses `opacity-0` (not `display: none`)
- * so it stays focusable, and the global `:focus-visible` ring in `base.css`
- * lands on that real hit area.
+ * inside it. The input uses `opacity-0` (not `display: none`) so it stays
+ * focusable, but that same opacity also erases the global `:focus-visible`
+ * ring from `base.css` — the ring paints, just on a fully transparent box
+ * (FELA-119). So the visible circle carries its own `peer-focus-visible`
+ * ring instead, same 2px/2px as the spec default, and the input keeps only
+ * its (invisible) native one.
  *
  * `task-check` (motion table, section 5) — checking/unchecking runs all
  * three parts at 240ms / `--ease-spring`: the gradient fill pops in with
  * `scale(.8→1)`, the checkmark draws in via `stroke-dashoffset`, and
- * `TaskRow`'s title strikethrough grows `width` 0→100% alongside it. Under
- * `prefers-reduced-motion` all three jump straight to their end state
+ * `TaskRow`'s title strikethrough reveals via `clip-path` alongside it.
+ * Under `prefers-reduced-motion` all three jump straight to their end state
  * (`useMediaQuery`, matching `AuroraBackground`'s pattern) — the blanket
  * reduced-motion rule in base.css only shortens transitions, which would
  * still leave a (very fast) scale/draw instead of the instant swap the
@@ -87,7 +90,14 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         aria-hidden="true"
         style={{ borderWidth: '1.5px' }}
         className={cn(
-          'pointer-events-none relative inline-flex size-(--size-checkbox) items-center justify-center rounded-full border-control-border transition-colors duration-(--duration-fast) ease-standard',
+          // `transition-[border-color]`, not Tailwind's `transition-colors`: that utility's
+          // property list also includes `outline-color` (FELA-119), which would fade the
+          // focus ring in instead of showing it instantly as spec 7 ("кольцо не анимируется")
+          // requires. Only `border-color` actually changes state here — the checked gradient
+          // is a `background-image` swap via inline style, which transitions don't animate.
+          // `relative` makes this the positioned ancestor for the fill span below (`task-check`).
+          'pointer-events-none relative inline-flex size-(--size-checkbox) items-center justify-center rounded-full border-control-border transition-[border-color] duration-(--duration-fast) ease-standard',
+          'peer-focus-visible:[outline:2px_solid_var(--color-focus-ring)] peer-focus-visible:[outline-offset:2px]',
           checked ? 'border-transparent shadow-glow-accent' : 'peer-hover:border-text-tertiary',
           disabled && 'opacity-45',
         )}

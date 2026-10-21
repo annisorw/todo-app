@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { KeyboardEvent } from 'react'
+import { announce } from '../../lib/announce'
 import { MAX_TASKS, MAX_TITLE_LENGTH, TITLE_COUNTER_THRESHOLD } from '../../domain/limits'
 import { normalizeTitle } from '../../domain/task'
 import type { Priority, TaskDraft } from '../../domain/task'
@@ -15,6 +16,8 @@ const ERROR_MESSAGE: Record<ComposerErrorKind, string> = {
 export interface UseComposerFormOptions {
   addTask: (draft: TaskDraft) => void
   isAtLimit: boolean
+  /** Called right after a successful `addTask` — lets the caller react (e.g. toast) without this hook knowing why. */
+  onTaskAdded?: () => void
 }
 
 export interface ComposerFormController {
@@ -45,7 +48,7 @@ export interface ComposerFormController {
  * other way (programmatic change, an older browser) still surfaces the
  * error instead of silently failing to add the task.
  */
-export function useComposerForm({ addTask, isAtLimit }: UseComposerFormOptions): ComposerFormController {
+export function useComposerForm({ addTask, isAtLimit, onTaskAdded }: UseComposerFormOptions): ComposerFormController {
   const [title, setTitleState] = useState('')
   const [priority, setPriority] = useState<Priority>('none')
   const [dueDate, setDueDate] = useState<string | null>(null)
@@ -78,10 +81,12 @@ export function useComposerForm({ addTask, isAtLimit }: UseComposerFormOptions):
     }
 
     addTask({ title: normalized, priority, dueDate })
+    announce(`Задача добавлена: «${normalized}»`)
     setTitleState('')
     setPriority('none')
     setDueDate(null)
     setSubmitAttemptedEmpty(false)
+    onTaskAdded?.()
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
