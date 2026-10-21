@@ -71,8 +71,17 @@ export function TaskList({
   onClearSearch,
   onSearchAll,
 }: TaskListProps) {
-  const { tasks, toggleTask, editTask, removeTask, restoreRemoved, moveTask, clearCompleted, lastRemoved } =
-    useTaskStore()
+  const {
+    tasks,
+    toggleTask,
+    editTask,
+    saveTaskEdit,
+    removeTask,
+    restoreRemoved,
+    moveTask,
+    clearCompleted,
+    lastRemoved,
+  } = useTaskStore()
   const { pushToast } = useToast()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [settling, setSettling] = useState<Record<string, SettlingEntry>>({})
@@ -164,9 +173,12 @@ export function TaskList({
   // not a position in the order (see `useTaskReorder`'s `pinnedIds`).
   const reorder = useTaskReorder({ tasks, ids: activeIds, pinnedIds: settlingIds, moveTask })
 
+  // design-spec 3.11a `saving`: a failed write leaves the editor open with
+  // its draft intact — the error is already visible through `ErrorBanner`
+  // (FELA-127). Only a confirmed write closes it.
   function handleSave(id: string, patch: TaskPatch) {
-    editTask(id, patch)
-    setEditingId(null)
+    const error = saveTaskEdit(id, patch)
+    if (error === null) setEditingId(null)
   }
 
   function handleRemove(task: Task) {

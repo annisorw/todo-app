@@ -115,6 +115,8 @@ function DatePanel({ id, value, today, anchorRef, onCommit, onClose, prefersRedu
       ref={panelRef}
       id={id}
       onKeyDown={handleKeyDown}
+      role="dialog"
+      aria-label="Выбор срока"
       initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
@@ -126,6 +128,7 @@ function DatePanel({ id, value, today, anchorRef, onCommit, onClose, prefersRedu
       <input
         ref={inputRef}
         type="date"
+        aria-label="Дата срока"
         value={value ?? ''}
         onChange={handleNativeChange}
         className="h-11 rounded-(--radius-sm) border border-surface-border-strong bg-surface-1 px-(--space-2) text-body text-primary sm:h-10"

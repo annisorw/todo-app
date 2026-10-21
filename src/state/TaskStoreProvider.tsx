@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { announce } from '../lib/announce'
 import type { TaskDraft, TaskPatch } from '../domain/task'
-import { isAtTaskLimit } from '../domain/taskList'
+import { isAtTaskLimit, updateTask } from '../domain/taskList'
 import type { StorageError } from '../storage/localStorageDriver'
-import { isUnreadableError, readTasks } from '../storage/taskStorage'
+import { isUnreadableError, readTasks, writeTasks } from '../storage/taskStorage'
 import { useDebouncedPersist } from '../storage/useDebouncedPersist'
 import { EMPTY_TASK_STATE, taskReducer } from './taskReducer'
 import type { TaskState } from './taskReducer'
@@ -45,6 +45,45 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
   const editTask = useCallback((id: string, patch: TaskPatch) => {
     dispatch({ type: 'task/edit', id, patch })
   }, [])
+
+  /**
+   * `TaskEditor`/`TaskEditorSheet`'s explicit «Сохранить» ([FELA-127](/FELA/issues/FELA-127),
+   * design-spec 3.11a `saving`): the only edit path whose caller needs to know
+   * the write actually landed before closing the editor, so unlike `editTask`
+   * above this writes immediately instead of waiting out the debounce.
+   *
+   * `nextTasks` is computed with the same pure `updateTask` the reducer uses,
+   * not read back from `state.tasks` after the dispatch — React hasn't
+   * committed that update yet when this function returns, so there's no
+   * "second source of data" here, just the one domain call evaluated early.
+   *
+   * A patch that changes nothing *and* has nothing outstanding to retry skips
+   * the write (spec: unchanged save is a no-op). Otherwise it always writes,
+   * even if the patch by itself is a no-op — that's what lets pressing
+   * «Сохранить» again after a failed write retry it once the cause clears.
+   *
+   * Same read-failure guard as `retryPersist` below ([FELA-70](/FELA/issues/FELA-70),
+   * [FELA-92](/FELA/issues/FELA-92)): a `'corrupted'` `storageError` is never
+   * overwritten by a write outcome, successful or not — it's the only path
+   * back to the quarantined bytes. The *returned* value still carries the
+   * real write result so `handleSave` closes the editor on a successful
+   * save even while that banner stays up.
+   */
+  const saveTaskEdit = useCallback(
+    (id: string, patch: TaskPatch): StorageError | null => {
+      const nextTasks = updateTask(state.tasks, id, patch)
+      dispatch({ type: 'task/edit', id, patch })
+
+      if (nextTasks === state.tasks && state.storageError === null) return null
+
+      const error = writeTasks(nextTasks)
+      if (state.storageError === null || !isUnreadableError(state.storageError)) {
+        dispatch({ type: 'storage/error', error })
+      }
+      return error
+    },
+    [state.tasks, state.storageError],
+  )
 
   const removeTask = useCallback((id: string) => {
     dispatch({ type: 'task/remove', id })
@@ -115,6 +154,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       addTask,
       toggleTask,
       editTask,
+      saveTaskEdit,
       removeTask,
       restoreRemoved,
       moveTask,
@@ -126,6 +166,7 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
       addTask,
       toggleTask,
       editTask,
+      saveTaskEdit,
       removeTask,
       restoreRemoved,
       moveTask,

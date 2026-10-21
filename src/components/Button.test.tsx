@@ -83,4 +83,14 @@ describe('Button', () => {
 
     expect(loadingSlotCount).toBe(idleSlotCount)
   })
+
+  // Acceptance criterion 18: input response (hover/focus/press) stays within
+  // --duration-fast (140ms, pinned in tokens.node.test.ts). jsdom resolves no
+  // real transition timing, so this is the classed contract — the same
+  // substitute the repo already uses for criterion 34 — not the millisecond
+  // measurement itself.
+  it('feeds its hover/focus transition the fast-duration token, not a slower one', () => {
+    render(<Button>Save</Button>)
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveClass('duration-(--duration-fast)')
+  })
 })
