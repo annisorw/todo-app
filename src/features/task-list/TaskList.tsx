@@ -251,7 +251,7 @@ export function TaskList({
           values={activeIds}
           onReorder={reorder.handleReorder}
           aria-label="Задачи"
-          className="flex flex-col gap-(--space-1)"
+          className="flex flex-col gap-(--space-2)"
         >
           <AnimatePresence initial={false}>
             {displayActive.map((task) => (

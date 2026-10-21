@@ -105,7 +105,7 @@ export function CompletedSection({
         onCancel={() => setConfirmOpen(false)}
       />
 
-      <ul className="flex flex-col gap-(--space-1)">
+      <ul className="flex flex-col gap-(--space-2)">
         <AnimatePresence initial={false}>
           {completed.map((task) => (
             <TaskRow

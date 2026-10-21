@@ -739,12 +739,12 @@ function RowBody({
       animate={lifted && !prefersReducedMotion ? { scale: 1.015, rotate: -0.6 } : { scale: 1, rotate: 0 }}
       transition={{ duration: prefersReducedMotion ? 0 : DRAG_LIFT_S, ease: EASE_STANDARD }}
       className={cn(
-        'task-row group flex min-h-(--layout-row-h) items-center gap-(--space-3) rounded-(--radius-lg) border px-(--space-2) transition-colors duration-(--duration-fast) ease-standard',
+        'task-row group flex min-h-(--layout-row-h) items-center gap-(--space-3) rounded-(--radius-lg) border px-(--space-4) py-(--space-3) transition-colors duration-(--duration-fast) ease-standard',
         // design-spec 6.4 — only the move mode has a second line: the control
         // strip is `basis-full`, so it needs the row to wrap. Without the
         // mode the row must stay single-line, or a long title plus chips
         // would push the buttons down.
-        moveMode && 'flex-wrap py-(--space-2)',
+        moveMode && 'flex-wrap',
         // S8: an opaque fill, because a translucent card in flight reads
         // dirty over the rows it passes — so the lifted row drops both the
         // `surface-1` tint and the blur. The hover/focus tint has to go with
