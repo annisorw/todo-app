@@ -5,10 +5,12 @@ import { createRef } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { LiveRegion } from '../../components/LiveRegion'
 import type { Filter } from '../../domain/filters'
-import { MAX_TITLE_LENGTH, TITLE_COUNTER_THRESHOLD } from '../../domain/limits'
+import { MAX_TASKS, MAX_TITLE_LENGTH, TITLE_COUNTER_THRESHOLD } from '../../domain/limits'
+import { writeTasks } from '../../storage/taskStorage'
 import { TaskStoreProvider } from '../../state/TaskStoreProvider'
 import { ToastProvider } from '../../state/ToastProvider'
 import { useTaskStore } from '../../state/useTaskStore'
+import { makeTasks } from '../../test/factories'
 import { stubMatchMedia } from '../../test/matchMedia'
 import { Composer } from './Composer'
 import type { ComposerHandle } from './Composer'
@@ -218,6 +220,24 @@ describe('Composer', () => {
     expect(panel).not.toHaveClass('shadow-glow-accent')
   })
 
+  it('on desktop, atLimit (error with no submit, no typing) still switches the glow to danger on focus', async () => {
+    const user = userEvent.setup()
+    writeTasks(makeTasks(MAX_TASKS))
+    const { container } = renderComposer()
+
+    const field = screen.getByRole('textbox', { name: 'Текст новой задачи' })
+    await user.click(field)
+    expect(field).toHaveFocus()
+    expect(screen.getByRole('alert')).toHaveTextContent('Список заполнен')
+
+    const panel = container.querySelector('[class*="radius-xl"]')
+    expect(panel).not.toBeNull()
+    expect(panel).toHaveClass('border-danger')
+    expect(panel).toHaveClass('shadow-glow-danger')
+    expect(panel).not.toHaveClass('shadow-glow-accent')
+    expect(panel).not.toHaveClass('shadow-sm')
+  })
+
   it('carries the .composer class on the glass panel (spec 2.7 fallback hook)', () => {
     const { container } = renderComposer()
 
@@ -281,6 +301,24 @@ describe('Composer', () => {
 
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Введите текст задачи.')
     expect(field).toHaveFocus()
+
+    const fieldBox = field.closest('[class*="radius-md"]')
+    expect(fieldBox).not.toBeNull()
+    expect(fieldBox).toHaveClass('border-danger')
+    expect(fieldBox).toHaveClass('shadow-glow-danger')
+    expect(fieldBox).not.toHaveClass('shadow-glow-accent')
+  })
+
+  it('in the sheet, atLimit (error with no submit, no typing) still switches the glow to danger on autofocus', async () => {
+    const user = userEvent.setup()
+    writeTasks(makeTasks(MAX_TASKS))
+    renderComposer()
+
+    await user.click(screen.getByRole('button', { name: 'Добавить задачу' }))
+    const dialog = screen.getByRole('dialog', { name: 'Добавить задачу' })
+    const field = within(dialog).getByRole('textbox', { name: 'Текст новой задачи' })
+    expect(field).toHaveFocus()
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Список заполнен')
 
     const fieldBox = field.closest('[class*="radius-md"]')
     expect(fieldBox).not.toBeNull()
