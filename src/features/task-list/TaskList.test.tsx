@@ -323,6 +323,8 @@ describe('TaskList', () => {
       // interactive chip's role instead.
       expect(screen.getByRole('button', { name: /Высокий/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Завтра/ })).toBeInTheDocument()
+      // FELA-131: a successful save showed an empty LiveRegion before this fix.
+      expect(screen.getByRole('status')).toHaveTextContent('Изменения сохранены: «Купить хлеб»')
     })
 
     it('rolls back all three fields on Отмена, leaving the task untouched', async () => {
@@ -341,6 +343,8 @@ describe('TaskList', () => {
       expect(screen.queryByText('другой текст')).not.toBeInTheDocument()
       expect(screen.getByText('Купить молоко')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Низкий/ })).toBeInTheDocument()
+      // FELA-131: cancelling an edit was never announced before this fix.
+      expect(screen.getByRole('status')).toHaveTextContent('Правка отменена')
     })
 
     it('a click outside the editor saves instead of cancelling (Postel’s Law)', async () => {
@@ -368,6 +372,8 @@ describe('TaskList', () => {
       await user.type(textarea, '{Enter}')
 
       expect(screen.getByText('Купить молоко')).toBeInTheDocument()
+      // FELA-131: routed through the same cancel path, so it gets the same announcement.
+      expect(screen.getByRole('status')).toHaveTextContent('Правка отменена')
     })
 
     it('two-level Esc: the first closes the priority popover, the second closes the editor and returns focus to the row', async () => {
@@ -746,6 +752,44 @@ describe('TaskList', () => {
 
       await user.click(within(alerts[1]!).getByRole('button', { name: 'Вернуть' }))
       expect(screen.getByText('Вторая')).toBeInTheDocument()
+    })
+
+    // FELA-168: the toast's `onAction` binds `restoreRemoved` once, at push
+    // time (`lastRemovedRef` in `TaskList`) — unlike the `Probe` harness in
+    // `TaskStoreProvider.test.tsx`, which reads a fresh `restoreRemoved` on
+    // every render and so can't reproduce the stale-closure bug this guards.
+    it('announces the restored task through the LiveRegion on the real undo path', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Первая' })])
+
+      await user.click(screen.getByRole('button', { name: /Действия с задачей/ }))
+      await user.click(screen.getByRole('menuitem', { name: 'Удалить' }))
+      await user.click(screen.getByRole('button', { name: 'Вернуть' }))
+
+      expect(screen.getByRole('status')).toHaveTextContent('Задача восстановлена: «Первая»')
+    })
+
+    it('names the task actually restored, not the first one, after two deletes in a row', async () => {
+      const user = userEvent.setup()
+      renderTaskList([
+        makeTask({ id: 't1', title: 'Первая' }),
+        makeTask({ id: 't2', title: 'Вторая' }),
+      ])
+
+      async function deleteRowNamed(title: string) {
+        const row = screen.getByText(title).closest('li')
+        if (row === null) throw new Error(`row for "${title}" not found`)
+        await user.click(within(row).getByRole('button', { name: /Действия с задачей/ }))
+        await user.click(screen.getByRole('menuitem', { name: 'Удалить' }))
+      }
+
+      await deleteRowNamed('Первая')
+      await deleteRowNamed('Вторая')
+
+      const alerts = screen.getAllByRole('alert')
+      await user.click(within(alerts[1]!).getByRole('button', { name: 'Вернуть' }))
+
+      expect(screen.getByRole('status')).toHaveTextContent('Задача восстановлена: «Вторая»')
     })
   })
 
