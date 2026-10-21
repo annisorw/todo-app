@@ -2,6 +2,7 @@ import { useId, useRef } from 'react'
 import { EmptyState } from './components/EmptyState'
 import { ErrorBanner } from './components/ErrorBanner'
 import { ProgressRing } from './components/ProgressRing'
+import { QuarantineNotice } from './components/QuarantineNotice'
 import { segmentTabId } from './components/segmentTabId'
 import { isDone } from './domain/task'
 import { Composer } from './features/composer/Composer'
@@ -73,6 +74,7 @@ function AppBody() {
           progressSlot={isFirstRun ? undefined : <ProgressRing completed={completedCount} total={tasks.length} />}
         />
         <ErrorBanner />
+        <QuarantineNotice />
         <Composer ref={composerRef} filter={toolbar.filter} />
         {isFirstRun ? (
           <EmptyState variant="first-run" onAddTask={() => composerRef.current?.requestNewTask()} />

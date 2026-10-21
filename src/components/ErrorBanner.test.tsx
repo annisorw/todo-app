@@ -1,10 +1,10 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTasks } from '../test/factories'
 import { blockedError, quotaError, storedItems, storedPayload, stubLocalStorage } from '../test/storage'
 import type { StorageStub } from '../test/storage'
-import { TASKS_STORAGE_KEY } from '../storage/taskStorage'
+import { CORRUPTED_BACKUP_KEY, TASKS_STORAGE_KEY } from '../storage/taskStorage'
 import { PERSIST_DEBOUNCE_MS } from '../storage/useDebouncedPersist'
 import { TaskStoreProvider } from '../state/TaskStoreProvider'
 import { ToastProvider } from '../state/ToastProvider'
@@ -79,12 +79,33 @@ describe('ErrorBanner', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Место в хранилище браузера закончилось')
   })
 
-  it('shows corrupted-data copy', () => {
+  it('shows the design-quarantine-surface §4A copy, with "Выгрузить в файл" and "Удалить копию"', () => {
     setup()
     stub = stubLocalStorage({ items: storedItems('{{{') })
     renderBanner()
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Сохранённые данные повреждены')
+    const banner = screen.getByRole('alert')
+    expect(banner).toHaveTextContent('Не удалось прочитать сохранённые задачи')
+    expect(banner).toHaveTextContent('Сохранённые задачи не читаются, поэтому список начат заново.')
+    expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Выгрузить в файл' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Удалить копию' })).toBeInTheDocument()
+  })
+
+  /**
+   * Критерий 7 спеки: пустой карантин оставляет в A только текст — ни
+   * «Выгрузить в файл», ни «Удалить копию» рисовать нечего.
+   */
+  it('shows no action buttons when the corrupted read left no quarantine backup', () => {
+    setup()
+    // The read fails, but the quarantine write itself also fails, so there
+    // are no bytes behind either button.
+    stub = stubLocalStorage({ items: storedItems('{{{'), writeError: quotaError() })
+    renderBanner()
+
+    const banner = screen.getByRole('alert')
+    expect(banner).toHaveTextContent('Не удалось прочитать сохранённые задачи')
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
   /**
@@ -220,18 +241,45 @@ describe('ErrorBanner', () => {
     expect(await blob.text()).toBe(truncated)
   })
 
-  it('refuses to export an empty envelope when the quarantine copy never landed', async () => {
+  /**
+   * design-quarantine-surface §4C/§10 criteria 5-6-7, wired through
+   * `ConfirmDialog` ([FELA-78](/FELA/issues/FELA-78)). The key is gone, the
+   * success toast fires, and A falls back to criterion 7's text-only state
+   * because `useQuarantineBackup` now reports an empty backup — not because
+   * `storageError` changed.
+   */
+  it('deletes the quarantined copy through the confirm dialog and leaves only text behind', async () => {
     setup()
     const user = userEvent.setup()
     const truncated = '{"version":1,"tasks":[{"id":"a","title":"Первая"},'
-    // The quarantine write itself fails (e.g. quota exhausted), so there is
-    // no backup to hand back — the export must not claim otherwise.
-    stub = stubLocalStorage({ items: storedItems(truncated), writeError: quotaError() })
+    stub = stubLocalStorage({ items: storedItems(truncated) })
     renderBanner()
 
-    await user.click(screen.getByRole('button', { name: 'Выгрузить в файл' }))
+    await user.click(screen.getByRole('button', { name: 'Удалить копию' }))
 
-    expect(createObjectURL).not.toHaveBeenCalled()
-    expect(screen.getByText(/Выгружать нечего/)).toBeInTheDocument()
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveAccessibleName('Удалить повреждённую копию?')
+    await user.click(within(dialog).getByRole('button', { name: 'Удалить копию' }))
+
+    expect(stub.items.has(CORRUPTED_BACKUP_KEY)).toBe(false)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Не удалось прочитать сохранённые задачи')
+    expect(screen.getByText('Повреждённая копия удалена.')).toBeInTheDocument()
+  })
+
+  it('cancelling the confirm dialog deletes nothing', async () => {
+    setup()
+    const user = userEvent.setup()
+    const truncated = '{"version":1,"tasks":[{"id":"a","title":"Первая"},'
+    stub = stubLocalStorage({ items: storedItems(truncated) })
+    renderBanner()
+
+    await user.click(screen.getByRole('button', { name: 'Удалить копию' }))
+    await user.click(screen.getByRole('button', { name: 'Отмена' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(stub.items.get(CORRUPTED_BACKUP_KEY)).toBe(truncated)
+    expect(screen.getByRole('button', { name: 'Удалить копию' })).toBeInTheDocument()
   })
 })

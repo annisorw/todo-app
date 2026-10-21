@@ -23,7 +23,7 @@ import { isValidDateKey } from '../domain/dueDate'
 import { MAX_TASKS, MAX_TITLE_LENGTH } from '../domain/limits'
 import { isPriority } from '../domain/task'
 import type { Priority, Task } from '../domain/task'
-import { readRaw, writeRaw } from './localStorageDriver'
+import { readRaw, removeRaw, writeRaw } from './localStorageDriver'
 import type { StorageError, StorageResult } from './localStorageDriver'
 
 export const TASKS_STORAGE_KEY = 'aurora.tasks.v1'
@@ -207,6 +207,23 @@ function quarantineRaw(raw: string): void {
  */
 export function readCorruptedBackup(): StorageResult<string | null> {
   return readRaw(CORRUPTED_BACKUP_KEY)
+}
+
+/**
+ * Снимает карантинную копию навсегда ([FELA-79](/FELA/issues/FELA-79)).
+ *
+ * Без отмены: разборщик никогда не прокидывает сырые байты карантина обратно
+ * в состояние приложения ([parseStoredTasks]), поэтому единственная копия
+ * этих байт — ключ `CORRUPTED_BACKUP_KEY` в `localStorage`, и после удаления
+ * её больше нигде нет. Восстановить можно только тем же способом, каким её
+ * туда положили, — вручную, из файла, выгруженного заранее через
+ * `readCorruptedBackup`. Основной ключ `TASKS_STORAGE_KEY` эта функция не
+ * трогает.
+ *
+ * @returns `null`, если удалилось
+ */
+export function removeCorruptedBackup(): StorageError | null {
+  return removeRaw(CORRUPTED_BACKUP_KEY)
 }
 
 /**

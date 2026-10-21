@@ -9,6 +9,7 @@ import {
   parseStoredTasks,
   readCorruptedBackup,
   readTasks,
+  removeCorruptedBackup,
   writeTasks,
 } from './taskStorage'
 
@@ -155,6 +156,21 @@ describe('taskStorage', () => {
       stub = stubLocalStorage({ items: storedItems(TRUNCATED), writeError: quotaError() })
 
       expect(readTasks()).toEqual({ tasks: [], error: 'corrupted', droppedCount: 0 })
+    })
+
+    // [FELA-79](/FELA/issues/FELA-79): the quarantine surface deletes the
+    // backup directly, independently of the main tasks key's own lifecycle.
+    it('removeCorruptedBackup lifts the key without touching the main tasks key', () => {
+      const mainPayload = storedPayload([makeTask()])
+      stub = stubLocalStorage({
+        items: { [TASKS_STORAGE_KEY]: mainPayload, [CORRUPTED_BACKUP_KEY]: TRUNCATED },
+      })
+
+      expect(removeCorruptedBackup()).toBeNull()
+
+      expect(stub.items.has(CORRUPTED_BACKUP_KEY)).toBe(false)
+      expect(readCorruptedBackup()).toEqual({ ok: true, value: null })
+      expect(stub.items.get(TASKS_STORAGE_KEY)).toBe(mainPayload)
     })
   })
 
