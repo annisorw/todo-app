@@ -1211,6 +1211,10 @@ describe('TaskList', () => {
   })
 
   describe('empty states', () => {
+    beforeEach(() => {
+      stubMatchMedia(true)
+    })
+
     it('shows EmptyState no-active when the active filter has zero tasks (design-spec S5)', () => {
       renderTaskList(
         [makeTask({ id: 't1', title: 'Готово', completedAt: '2026-01-01T00:00:00.000Z' })],

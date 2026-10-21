@@ -11,7 +11,7 @@ import { useToast } from '../../state/useToast'
 import { useTaskStore } from '../../state/useTaskStore'
 import { FILTER_LABELS } from '../toolbar/filterLabels'
 import { CompletedSection } from './CompletedSection'
-import { TaskRow } from './TaskRow'
+import { EASE_STANDARD, TaskRow } from './TaskRow'
 import { useRovingFocus } from './useRovingFocus'
 import { useTaskReorder } from './useTaskReorder'
 
@@ -250,7 +250,7 @@ export function TaskList({
         key={filter}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: prefersReducedMotion ? 0 : 0.14, ease: [0.2, 0, 0, 1] }}
+        transition={{ duration: prefersReducedMotion ? 0 : 0.14, ease: EASE_STANDARD }}
       >
         {displayActive.length === 0 && displayCompleted.length === 0 ? (
           query !== '' ? (

@@ -157,6 +157,34 @@ describe('TaskList reordering', () => {
       expect(handleFor('Первая')).toHaveAttribute('aria-grabbed', 'false')
       expect(renderedOrder()).toEqual(['Вторая', 'Первая', 'Третья'])
     })
+
+    it('keeps a held row grabbed with real focus on its handle across a filter switch (FELA-134 review, PR #79)', () => {
+      const { rerender } = renderTaskList(makeThree(), { filter: 'all' })
+
+      fireEvent.keyDown(handleFor('Первая'), { key: ' ' })
+      expect(handleFor('Первая')).toHaveAttribute('aria-grabbed', 'true')
+
+      // None of the three tasks are done, so 'Первая' stays visible under
+      // 'active' too — but the filter-switch crossfade (FELA-134) still
+      // remounts the whole panel on `key={filter}`, tearing the handle's
+      // DOM node down and rebuilding it without ever firing the `blur` that
+      // normally releases a grab (see the test above).
+      rerender(
+        <TaskStoreProvider>
+          <ToastProvider>
+            <LiveRegion />
+            <Harness filter="active" />
+          </ToastProvider>
+        </TaskStoreProvider>,
+      )
+
+      // The grab must survive the remount as one of its two honest
+      // outcomes — still held, with real keyboard focus on the (new)
+      // handle — not a third state of "grabbed but focus dropped to
+      // `<body>`", which `aria-grabbed="true"` alone would not catch.
+      expect(handleFor('Первая')).toHaveAttribute('aria-grabbed', 'true')
+      expect(handleFor('Первая')).toHaveFocus()
+    })
   })
 
   describe('Ctrl/Cmd+↑/↓ without the grab mode (design-spec 6.4)', () => {
