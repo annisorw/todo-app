@@ -7,7 +7,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { Menu } from './Menu'
 
 /** The dialog needs something outside itself to return focus to. */
-function Harness({ completedCount = 3 }: { completedCount?: number }) {
+function Harness() {
   const [open, setOpen] = useState(false)
   const onConfirm = vi.fn()
   const onCancel = vi.fn(() => setOpen(false))
@@ -17,19 +17,41 @@ function Harness({ completedCount = 3 }: { completedCount?: number }) {
       <button type="button" onClick={() => setOpen(true)}>
         Удалить выполненные
       </button>
-      <ConfirmDialog open={open} completedCount={completedCount} onConfirm={onConfirm} onCancel={onCancel} />
+      <ConfirmDialog
+        open={open}
+        title="Удалить все выполненные (3)?"
+        confirmLabel="Удалить 3 задачи"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />
     </div>
   )
 }
 
 describe('ConfirmDialog', () => {
   it('renders nothing while closed', () => {
-    render(<ConfirmDialog open={false} completedCount={3} onConfirm={vi.fn()} onCancel={vi.fn()} />)
+    render(
+      <ConfirmDialog
+        open={false}
+        title="Удалить все выполненные (3)?"
+        confirmLabel="Удалить 3 задачи"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('shows the one scenario with the count, and focuses Cancel first', () => {
-    render(<ConfirmDialog open completedCount={3} onConfirm={vi.fn()} onCancel={vi.fn()} />)
+  it('renders the passed title/confirmLabel, and focuses Cancel first', () => {
+    render(
+      <ConfirmDialog
+        open
+        title="Удалить все выполненные (3)?"
+        confirmLabel="Удалить 3 задачи"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
 
     const dialog = screen.getByRole('dialog')
     expect(dialog).toHaveAccessibleName('Удалить все выполненные (3)?')
@@ -37,20 +59,79 @@ describe('ConfirmDialog', () => {
     expect(screen.getByRole('button', { name: 'Удалить 3 задачи' })).toBeInTheDocument()
   })
 
-  it.each([
-    [1, 'Удалить 1 задачу'],
-    [2, 'Удалить 2 задачи'],
-    [5, 'Удалить 5 задач'],
-    [11, 'Удалить 11 задач'],
-    [21, 'Удалить 21 задачу'],
-  ])('pluralises the confirm label for %i as "%s"', (count, label) => {
-    render(<ConfirmDialog open completedCount={count} onConfirm={vi.fn()} onCancel={vi.fn()} />)
-    expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
+  it('renders the passed body under the title, with aria-describedby pointing at it', () => {
+    render(
+      <ConfirmDialog
+        open
+        title="Выгрузить карантинную копию?"
+        body="Файл скачается в формате JSON."
+        confirmLabel="Выгрузить"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    const dialog = screen.getByRole('dialog')
+    const body = screen.getByText('Файл скачается в формате JSON.')
+    expect(dialog).toHaveAttribute('aria-describedby', body.id)
   })
 
-  it('traps Tab between Cancel and the danger button, both directions', async () => {
+  it('renders nothing extra when body is omitted', () => {
+    render(
+      <ConfirmDialog
+        open
+        title="Удалить все выполненные (3)?"
+        confirmLabel="Удалить 3 задачи"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('dialog')).not.toHaveAttribute('aria-describedby')
+  })
+
+  it('defaults confirmVariant to danger, and respects an explicit override', () => {
+    const { rerender } = render(
+      <ConfirmDialog
+        open
+        title="Удалить все выполненные (3)?"
+        confirmLabel="Удалить 3 задачи"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Удалить 3 задачи' })).toHaveAttribute(
+      'class',
+      expect.stringContaining('bg-danger'),
+    )
+
+    rerender(
+      <ConfirmDialog
+        open
+        title="Выгрузить карантинную копию?"
+        confirmLabel="Выгрузить"
+        confirmVariant="primary"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Выгрузить' })).toHaveAttribute(
+      'class',
+      expect.stringContaining('bg-accent'),
+    )
+  })
+
+  it('traps Tab between Cancel and the confirm button, both directions', async () => {
     const user = userEvent.setup()
-    render(<ConfirmDialog open completedCount={3} onConfirm={vi.fn()} onCancel={vi.fn()} />)
+    render(
+      <ConfirmDialog
+        open
+        title="Удалить все выполненные (3)?"
+        confirmLabel="Удалить 3 задачи"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
 
     const cancel = screen.getByRole('button', { name: 'Отмена' })
     const confirm = screen.getByRole('button', { name: 'Удалить 3 задачи' })
@@ -69,17 +150,33 @@ describe('ConfirmDialog', () => {
   it('closes on Escape and calls onCancel', async () => {
     const user = userEvent.setup()
     const onCancel = vi.fn()
-    render(<ConfirmDialog open completedCount={3} onConfirm={vi.fn()} onCancel={onCancel} />)
+    render(
+      <ConfirmDialog
+        open
+        title="Удалить все выполненные (3)?"
+        confirmLabel="Удалить 3 задачи"
+        onConfirm={vi.fn()}
+        onCancel={onCancel}
+      />,
+    )
 
     await user.keyboard('{Escape}')
 
     expect(onCancel).toHaveBeenCalledOnce()
   })
 
-  it('calls onConfirm when the danger button is activated', async () => {
+  it('calls onConfirm when the confirm button is activated', async () => {
     const user = userEvent.setup()
     const onConfirm = vi.fn()
-    render(<ConfirmDialog open completedCount={3} onConfirm={onConfirm} onCancel={vi.fn()} />)
+    render(
+      <ConfirmDialog
+        open
+        title="Удалить все выполненные (3)?"
+        confirmLabel="Удалить 3 задачи"
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+      />,
+    )
 
     await user.click(screen.getByRole('button', { name: 'Удалить 3 задачи' }))
 
@@ -144,7 +241,8 @@ function DialogWithMenu() {
     <div>
       <ConfirmDialog
         open={dialogOpen}
-        completedCount={3}
+        title="Удалить все выполненные (3)?"
+        confirmLabel="Удалить 3 задачи"
         onConfirm={vi.fn()}
         onCancel={() => setDialogOpen(false)}
       />
