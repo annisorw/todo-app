@@ -431,4 +431,40 @@ describe('mono font weight', () => {
     expect(utilityBlock).toBeDefined()
     expect(utilityBlock).toContain('--tw-font-weight: var(--font-mono--font-weight)')
   })
+
+  it('bundles tabular-nums into the same utility — a digit must not reflow the layout on 9 -> 10', () => {
+    const utilityBlock = CSS_WITHOUT_COMMENTS.match(/@utility text-mono-num\s*{([^}]*)}/)?.[1]
+    expect(utilityBlock).toContain('font-variant-numeric: tabular-nums')
+  })
+
+  /**
+   * The negative path acceptance criterion 35 exists to catch: an element
+   * styled with `var(--font-mono)` directly, outside `.text-mono-num`, would
+   * get the mono typeface with none of this file's guarantees — browser-default
+   * weight, no tabular-nums. `tokens.css` has exactly one such declaration
+   * today, inside `.text-mono-num` itself; this pins that count so a second,
+   * bare `font-family: var(--font-mono)` added elsewhere fails loudly instead
+   * of quietly shipping an unguarded mono element.
+   */
+  it('is the only place in tokens.css that sets font-family to --font-mono', () => {
+    const occurrences = [...CSS_WITHOUT_COMMENTS.matchAll(/font-family:\s*var\(--font-mono\)/g)]
+    expect(occurrences).toHaveLength(1)
+
+    const utilityBlock = CSS_WITHOUT_COMMENTS.match(/@utility text-mono-num\s*{([^}]*)}/)?.[1]
+    expect(utilityBlock).toContain('font-family: var(--font-mono)')
+  })
+})
+
+/**
+ * Acceptance criterion 18: input response (hover, focus, press) stays within
+ * 140ms (Doherty threshold, see the comment above `--duration-fast` in
+ * `tokens.css`). jsdom resolves no real transition timing, so what is checked
+ * here is the token value itself — `Button.test.tsx` and `ChipTag`'s callers
+ * separately pin that the interactive-feedback classes actually reference
+ * this token rather than a slower one.
+ */
+describe('input response time (acceptance criterion 18)', () => {
+  it('pins --duration-fast to 140ms', () => {
+    expect(DARK_TOKENS['--duration-fast']).toBe('140ms')
+  })
 })

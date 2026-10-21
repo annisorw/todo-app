@@ -301,6 +301,41 @@ describe('keyboard flow (design-spec 6.3 / section 7)', () => {
 
       expect(storeSummary()).toBe('Активных: 0 · Выполнено: 1')
     })
+
+    /**
+     * Acceptance criterion 17: under `prefers-reduced-motion: reduce`, no
+     * action becomes unavailable. This whole file already runs with reduced
+     * motion active — `stubMatchMedia` cannot distinguish the viewport query
+     * from the motion query, so every test above incidentally proves this for
+     * the keyboard path, and the "stops working" test just above does the
+     * same for a mouse click. This test is the one place that says so
+     * explicitly and chains the full add → complete → delete → undo cycle in
+     * one pass, so a future reader does not have to reconstruct criterion 17's
+     * coverage from incidental side effects.
+     */
+    it('every action in the add/complete/delete/undo cycle still works (criterion 17)', async () => {
+      const user = userEvent.setup()
+      renderApp(makeTasks(1))
+
+      await user.keyboard('n')
+      await user.keyboard('Новая задача{Enter}')
+      expect(storeSummary()).toBe('Активных: 2 · Выполнено: 0')
+
+      const checkbox = screen.getByRole('checkbox', { name: 'Новая задача' })
+      await user.click(checkbox)
+      expect(storeSummary()).toBe('Активных: 1 · Выполнено: 1')
+
+      await user.click(screen.getByRole('checkbox', { name: 'Новая задача' }))
+      expect(storeSummary()).toBe('Активных: 2 · Выполнено: 0')
+
+      screen.getByRole('checkbox', { name: 'Новая задача' }).focus()
+      await user.keyboard('{Delete}')
+      expect(screen.getByRole('alert')).toHaveTextContent('Задача удалена: «Новая задача»')
+      expect(storeSummary()).toBe('Активных: 1 · Выполнено: 0')
+
+      await user.keyboard('{Control>}z{/Control}')
+      expect(storeSummary()).toBe('Активных: 2 · Выполнено: 0')
+    })
   })
 
   describe('editing from the keyboard (acceptance criterion 32)', () => {
