@@ -92,6 +92,10 @@ function renderReorderableRow(task: Task, overrides: Partial<ComponentProps<type
           onHandleBlur: () => {},
           onDragStart: () => {},
           onDragEnd: () => {},
+          onGrab: () => {},
+          onStep: () => {},
+          onDrop: () => {},
+          onCancel: () => {},
         }}
         {...overrides}
       />
