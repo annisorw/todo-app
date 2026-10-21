@@ -56,6 +56,8 @@ describe('Composer', () => {
     expect(field).toHaveValue('')
     expect(screen.getByRole('button', { name: 'Приоритет' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Срок' })).toBeInTheDocument()
+    // FELA-131: adding was silent in the LiveRegion before this fix.
+    expect(screen.getByRole('status')).toHaveTextContent('Задача добавлена: «Высокий приоритет»')
   })
 
   it('Shift+Enter inserts a newline instead of submitting', async () => {

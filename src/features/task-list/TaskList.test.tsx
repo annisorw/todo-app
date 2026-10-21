@@ -141,6 +141,8 @@ describe('TaskList', () => {
       // interactive chip's role instead.
       expect(screen.getByRole('button', { name: /Высокий/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Завтра/ })).toBeInTheDocument()
+      // FELA-131: a successful save showed an empty LiveRegion before this fix.
+      expect(screen.getByRole('status')).toHaveTextContent('Изменения сохранены: «Купить хлеб»')
     })
 
     it('rolls back all three fields on Отмена, leaving the task untouched', async () => {
@@ -159,6 +161,8 @@ describe('TaskList', () => {
       expect(screen.queryByText('другой текст')).not.toBeInTheDocument()
       expect(screen.getByText('Купить молоко')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Низкий/ })).toBeInTheDocument()
+      // FELA-131: cancelling an edit was never announced before this fix.
+      expect(screen.getByRole('status')).toHaveTextContent('Правка отменена')
     })
 
     it('a click outside the editor saves instead of cancelling (Postel’s Law)', async () => {
@@ -186,6 +190,8 @@ describe('TaskList', () => {
       await user.type(textarea, '{Enter}')
 
       expect(screen.getByText('Купить молоко')).toBeInTheDocument()
+      // FELA-131: routed through the same cancel path, so it gets the same announcement.
+      expect(screen.getByRole('status')).toHaveTextContent('Правка отменена')
     })
 
     it('two-level Esc: the first closes the priority popover, the second closes the editor and returns focus to the row', async () => {

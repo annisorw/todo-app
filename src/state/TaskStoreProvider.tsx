@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useReducer } from 'react'
 import type { ReactNode } from 'react'
+import { announce } from '../lib/announce'
 import type { TaskDraft, TaskPatch } from '../domain/task'
 import { isAtTaskLimit } from '../domain/taskList'
 import type { StorageError } from '../storage/localStorageDriver'
@@ -49,9 +50,15 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'task/remove', id })
   }, [])
 
+  // Centralized here, not at each caller (the undo toast's "Вернуть" today,
+  // a future `Ctrl/Cmd+Z` shortcut per design-spec 6.3 tomorrow) — one
+  // dispatch, one announcement, no risk of the two call sites doubling up.
   const restoreRemoved = useCallback(() => {
+    if (state.lastRemoved !== null) {
+      announce(`Задача восстановлена: «${state.lastRemoved.task.title}»`)
+    }
     dispatch({ type: 'task/restoreRemoved' })
-  }, [])
+  }, [state.lastRemoved])
 
   const moveTask = useCallback((from: number, to: number) => {
     dispatch({ type: 'task/move', from, to })
