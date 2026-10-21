@@ -209,6 +209,24 @@ export function readCorruptedBackup(): StorageResult<string | null> {
   return readRaw(CORRUPTED_BACKUP_KEY)
 }
 
+/**
+ * Отказ, при котором сохранённое **не прочиталось**, а исходные байты уехали в
+ * карантин.
+ *
+ * Единственный источник правды для двух разных решений, которые раньше оба
+ * сравнивали код с `'corrupted'` руками: откуда брать байты для «Выгрузить в
+ * файл» и имеет ли смысл «Повторить». Повторять нечего — ломалась не запись, и
+ * удавшаяся запись ничего о читаемости не говорит
+ * ([FELA-70](/FELA/issues/FELA-70)).
+ *
+ * `'blocked'` тоже приходит из чтения, но там недоступно само хранилище:
+ * карантина нет, выгружать можно только список из памяти, а запись честно
+ * отказывает тем же кодом.
+ */
+export function isUnreadableError(error: StorageError): boolean {
+  return error === 'corrupted'
+}
+
 export function readTasks(): TasksReadResult {
   const result = readRaw(TASKS_STORAGE_KEY)
   if (!result.ok) return { tasks: [], error: result.error, droppedCount: 0 }

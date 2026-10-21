@@ -132,6 +132,56 @@ describe('ErrorBanner', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Браузер заблокировал локальное хранилище')
   })
 
+  /**
+   * [FELA-70](/FELA/issues/FELA-70): при `'corrupted'` повторять нечего —
+   * ломалось чтение. Кнопка бы сработала (запись-то идёт), погасила баннер и
+   * унесла с ним «Выгрузить в файл» — единственный путь к карантинным байтам.
+   */
+  it('offers no "Повторить" when the failure was a read, keeping the export up', () => {
+    setup()
+    stub = stubLocalStorage({ items: storedItems('{{{') })
+    renderBanner()
+
+    expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Выгрузить в файл' })).toBeInTheDocument()
+  })
+
+  /**
+   * Тот же инвариант, но без оглядки на имя кнопки: **ни одно** действие
+   * баннера `corrupted`, кроме самой выгрузки, не делает карантинные байты
+   * недостижимыми. Сегодня перебор пуст; верни «Повторить» для `'corrupted'` —
+   * и тест покраснеет на выгрузке после нажатия.
+   */
+  it('keeps the quarantined bytes reachable after pressing every other control', async () => {
+    setup()
+    const user = userEvent.setup()
+    vi.useFakeTimers()
+    const truncated = '{"version":1,"tasks":[{"id":"a","title":"Первая"},'
+    stub = stubLocalStorage({ items: storedItems(truncated) })
+    renderBanner()
+
+    // Персист уже заменил основной ключ пустым конвертом: байты остались
+    // только в карантине, и терять путь к ним теперь необратимо.
+    act(() => {
+      vi.advanceTimersByTime(PERSIST_DEBOUNCE_MS)
+    })
+    vi.useRealTimers()
+
+    const exportName = 'Выгрузить в файл'
+    const others = screen
+      .getAllByRole('button')
+      .filter((button) => button.textContent !== exportName)
+    for (const button of others) {
+      await user.click(button)
+    }
+
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: exportName }))
+
+    const blob = createObjectURL.mock.calls[0]?.[0] as Blob
+    expect(await blob.text()).toBe(truncated)
+  })
+
   it('exports the current in-memory tasks as JSON when a write is blocked', async () => {
     setup()
     const user = userEvent.setup()

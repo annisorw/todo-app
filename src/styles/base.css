@@ -5,37 +5,39 @@
  * what Preflight does not cover is added here, so there is one reset, not two.
  */
 
-:root {
-  /* Native scrollbars, form controls and the UA canvas follow the theme. Not a
-   * token: it is a document-level declaration, not a value components consume. */
-  color-scheme: dark;
-}
+@layer base {
+  :root {
+    /* Native scrollbars, form controls and the UA canvas follow the theme. Not a
+     * token: it is a document-level declaration, not a value components consume. */
+    color-scheme: dark;
+  }
 
-[data-theme='light'] {
-  color-scheme: light;
-}
+  [data-theme='light'] {
+    color-scheme: light;
+  }
 
-html {
-  /* Preflight sets text-size-adjust: 100% only on some targets. */
-  -webkit-text-size-adjust: 100%;
-}
+  html {
+    /* Preflight sets text-size-adjust: 100% only on some targets. */
+    -webkit-text-size-adjust: 100%;
+  }
 
-body {
-  min-height: 100dvh;
-  background-color: var(--color-bg-canvas);
-  color: var(--color-text-primary);
-  font-family: var(--font-sans);
-  font-size: var(--text-body);
-  line-height: var(--text-body--line-height);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+  body {
+    min-height: 100dvh;
+    background-color: var(--color-bg-canvas);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-/* Visible focus ring on every interactive element in both themes (spec,
- * acceptance criterion 24). Components may restyle it; they may not remove it. */
-:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
+  /* Visible focus ring on every interactive element in both themes (spec,
+   * acceptance criterion 24). Components may restyle it; they may not remove it. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
 }
 
 /* ---- Mandatory fallback when backdrop-filter is unsupported (spec 2.7) ----- */
