@@ -87,10 +87,45 @@ export function diffMove(
   return null
 }
 
+/**
+ * Where `Esc` puts a held row back (design-spec 6.4), as a display index.
+ *
+ * The origin is remembered as *the row it sat behind*, not as the index it
+ * sat at: the list can be re-filtered or re-searched while the row is held,
+ * and an index from the old list points at an arbitrary slot in the new one.
+ * An id survives that. `from` is where the row is now, so the result already
+ * accounts for the row leaving its current slot — the same splice semantics
+ * `task/move` uses.
+ *
+ * `null` means the row started at the head. An origin row that is itself
+ * gone leaves nothing to measure from, so the row stays where it is rather
+ * than guessing.
+ */
+export function resolveOrigin(
+  ids: readonly string[],
+  from: number,
+  originPrevId: string | null,
+): number {
+  if (originPrevId === null) return 0
+  const prev = ids.indexOf(originPrevId)
+  if (prev === -1) return from
+  return prev < from ? prev + 1 : prev
+}
+
 export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions): TaskReorder {
   const [grabbedId, setGrabbedId] = useState<string | null>(null)
-  // Where the grab started, so `Esc` can put the row back (design-spec 6.4).
-  const originIndex = useRef(0)
+  // The row the held one sat behind when it was lifted — see `resolveOrigin`.
+  const originPrevId = useRef<string | null>(null)
+
+  // A held row can leave the list under us: filtered out, searched away,
+  // deleted. Focus never left the handle, so no `blur` arrives to clear the
+  // grab, and the stale id would block every other row from being lifted
+  // with nothing on screen to say why. Dropped during render rather than in
+  // an effect, so the whole hook reads one value for "what is held" in the
+  // same pass — and so a row that comes back into view does not come back
+  // lifted.
+  const held = grabbedId !== null && ids.includes(grabbedId) ? grabbedId : null
+  if (grabbedId !== held) setGrabbedId(held)
 
   const titleOf = useCallback(
     (id: string) => tasks.find((task) => task.id === id)?.title ?? '',
@@ -166,29 +201,28 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
         // its click on keyup.
         event.preventDefault()
 
-        if (grabbedId === id) {
+        if (held === id) {
           setGrabbedId(null)
           announce(`Задача «${titleOf(id)}» опущена на позицию ${index + 1}`)
           return
         }
         // Another row is still held — one grab at a time.
-        if (grabbedId !== null) return
+        if (held !== null) return
 
-        originIndex.current = index
+        originPrevId.current = index > 0 ? (ids[index - 1] ?? null) : null
         setGrabbedId(id)
         announce(`Задача «${titleOf(id)}» поднята, позиция ${index + 1} из ${ids.length}`)
         return
       }
 
-      if (grabbedId !== id) {
+      if (held !== id) {
         handleRowKeyDown(event, id)
         return
       }
 
       if (event.key === 'Escape') {
         event.preventDefault()
-        // The list can have got shorter while the row was held.
-        const origin = Math.min(originIndex.current, ids.length - 1)
+        const origin = resolveOrigin(ids, index, originPrevId.current)
         applyMove(index, origin)
         setGrabbedId(null)
         announce(`Перемещение отменено, позиция ${origin + 1}`)
@@ -203,7 +237,7 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
       if (to < 0 || to >= ids.length) return
       if (applyMove(index, to)) announce(`Позиция ${to + 1} из ${ids.length}`)
     },
-    [ids, grabbedId, applyMove, titleOf, handleRowKeyDown],
+    [ids, held, applyMove, titleOf, handleRowKeyDown],
   )
 
   const handleHandleBlur = useCallback((id: string) => {
@@ -214,9 +248,7 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
   }, [])
 
   return {
-    // A held row can leave the list under us (filtered out, deleted); don't
-    // keep claiming it is lifted.
-    grabbedId: grabbedId !== null && ids.includes(grabbedId) ? grabbedId : null,
+    grabbedId: held,
     handleReorder,
     handleHandleKeyDown,
     handleHandleBlur,
