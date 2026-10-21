@@ -1031,5 +1031,37 @@ describe('TaskList', () => {
 
       expect(screen.getByRole('menu')).toBeInTheDocument()
     })
+
+    it('reflects menu state on the mobile "more" button aria-expanded (FELA-175 regression)', () => {
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ })
+      expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+
+      fireEvent.click(moreButton)
+      expect(moreButton).toHaveAttribute('aria-expanded', 'true')
+
+      fireEvent.click(moreButton)
+      expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+    })
+  })
+
+  describe('desktop row menu button aria-expanded (FELA-175 regression)', () => {
+    beforeEach(() => {
+      stubMatchMedia(true)
+    })
+
+    it('reflects menu state on the desktop "more" button aria-expanded', () => {
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ })
+      expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+
+      fireEvent.click(moreButton)
+      expect(moreButton).toHaveAttribute('aria-expanded', 'true')
+
+      fireEvent.click(moreButton)
+      expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+    })
   })
 })
