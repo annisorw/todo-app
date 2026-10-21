@@ -89,7 +89,7 @@ function DatePanel({ id, value, today, anchorRef, onCommit, onClose, prefersRedu
         type="date"
         value={value ?? ''}
         onChange={handleNativeChange}
-        className="h-10 rounded-(--radius-sm) border border-surface-border-strong bg-surface-1 px-(--space-2) text-body text-primary"
+        className="h-11 rounded-(--radius-sm) border border-surface-border-strong bg-surface-1 px-(--space-2) text-body text-primary sm:h-10"
       />
       <div className="flex flex-col gap-(--space-1)">
         {PRESETS.map((preset) => (
@@ -98,7 +98,7 @@ function DatePanel({ id, value, today, anchorRef, onCommit, onClose, prefersRedu
             type="button"
             onClick={() => handlePreset(preset)}
             className={cn(
-              'rounded-(--radius-sm) px-(--space-3) py-(--space-2) text-left text-label transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-hover',
+              'flex min-h-11 items-center rounded-(--radius-sm) px-(--space-3) py-(--space-2) text-left text-label transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-hover sm:min-h-0',
               preset.key === 'clear' ? 'text-danger' : 'text-primary',
             )}
           >
