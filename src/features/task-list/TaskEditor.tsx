@@ -96,7 +96,7 @@ export function TaskEditor({ task, onSave, onCancel }: TaskEditorProps) {
         <PrioritySelect value={form.priority} onChange={form.setPriority} />
         <DueDatePicker value={form.dueDate} onChange={form.setDueDate} />
         {form.showCounter && (
-          <span className={cn('ml-auto text-caption', form.isTooLong ? 'text-danger' : 'text-tertiary')}>
+          <span className={cn('ml-auto text-caption text-mono-num', form.isTooLong ? 'text-danger' : 'text-tertiary')}>
             {form.title.length}/{MAX_TITLE_LENGTH}
           </span>
         )}
