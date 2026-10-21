@@ -217,6 +217,29 @@ describe('TaskStoreProvider', () => {
     expect(stored).toMatchObject({ version: 1, tasks: [{ title: 'Новая' }] })
   })
 
+  /**
+   * [FELA-70](/FELA/issues/FELA-70): при `'corrupted'` ломалось чтение, а
+   * запись работает — значит повтор **удаётся**. Снять отказ по удавшейся
+   * записи означало бы погасить баннер, а вместе с ним убрать единственный
+   * путь к карантинным байтам, которые при этом целы.
+   */
+  it('keeps a corrupted read failure after a retry write succeeds', () => {
+    const truncated = '{"version":1,"tasks":[{"id":"a","title":"Первая"},'
+    vi.useFakeTimers()
+    stub = stubLocalStorage({ items: storedItems(truncated) })
+
+    renderStore()
+    letPersistRun()
+    expect(screen.getByTestId('error')).toHaveTextContent('corrupted')
+
+    click('retry')
+
+    // Запись прошла — и всё равно отказ чтения на месте.
+    expect(stub.items.get(TASKS_STORAGE_KEY)).toBe('{"version":1,"tasks":[]}')
+    expect(screen.getByTestId('error')).toHaveTextContent('corrupted')
+    expect(readCorruptedBackup()).toEqual({ ok: true, value: truncated })
+  })
+
   it('keeps the banner up when the retry write fails again', () => {
     vi.useFakeTimers()
     stub = stubLocalStorage({ writeError: quotaError() })
