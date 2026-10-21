@@ -5,7 +5,7 @@ import { TASKS_STORAGE_KEY, readCorruptedBackup } from '../storage/taskStorage'
 import { PERSIST_DEBOUNCE_MS } from '../storage/useDebouncedPersist'
 import { makeTask } from '../test/factories'
 import { blockedError, quotaError, storedItems, storedPayload, stubLocalStorage } from '../test/storage'
-import type { StorageStub } from '../test/storage'
+import type { StorageStub, StorageStubOptions } from '../test/storage'
 import { TaskStoreProvider } from './TaskStoreProvider'
 import { useTaskStore } from './useTaskStore'
 
@@ -236,6 +236,31 @@ describe('TaskStoreProvider', () => {
 
     // Запись прошла — и всё равно отказ чтения на месте.
     expect(stub.items.get(TASKS_STORAGE_KEY)).toBe('{"version":1,"tasks":[]}')
+    expect(screen.getByTestId('error')).toHaveTextContent('corrupted')
+    expect(readCorruptedBackup()).toEqual({ ok: true, value: truncated })
+  })
+
+  /**
+   * [FELA-92](/FELA/issues/FELA-92): тот же инвариант, но запись при повторе
+   * **падает**. Код записи не должен вытеснить отказ чтения: иначе
+   * `ErrorBanner` уйдёт в ветку не-карантина и выгрузит пустой список из
+   * памяти, а целые карантинные байты снова станут недостижимы.
+   */
+  it('keeps a corrupted read failure after a retry write fails', () => {
+    const truncated = '{"version":1,"tasks":[{"id":"a","title":"Первая"},'
+    vi.useFakeTimers()
+    // Объект опций мутируемый: стаб читает `writeError` в момент записи, так
+    // что запись ломается уже после гидратации и прохода персиста.
+    const options: StorageStubOptions = { items: storedItems(truncated) }
+    stub = stubLocalStorage(options)
+
+    renderStore()
+    letPersistRun()
+    expect(screen.getByTestId('error')).toHaveTextContent('corrupted')
+
+    options.writeError = quotaError()
+    click('retry')
+
     expect(screen.getByTestId('error')).toHaveTextContent('corrupted')
     expect(readCorruptedBackup()).toEqual({ ok: true, value: truncated })
   })
