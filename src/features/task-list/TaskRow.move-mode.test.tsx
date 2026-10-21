@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { BUTTON_VARIANT_CLASSES } from '../../components/button-variant'
 import { LiveRegion } from '../../components/LiveRegion'
 import { selectTaskView } from '../../domain/filters'
 import type { Task } from '../../domain/task'
@@ -77,6 +78,13 @@ function renderedOrder(): string[] {
 
 function moreFor(title: string): HTMLElement {
   return screen.getByRole('button', { name: `Действия с задачей: ${title}` })
+}
+
+/** The row's own `.task-row` container, located by its title rather than index — that index shifts as rows reorder. */
+function rowFor(title: string): HTMLElement {
+  return Array.from(document.querySelectorAll('ul[aria-label="Задачи"] .task-row')).find((row) =>
+    row.textContent?.includes(title),
+  ) as HTMLElement
 }
 
 function announcement(): string {
@@ -206,6 +214,60 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
       expect(
         screen.getByRole('button', { name: 'Переместить вверх: Вторая' }),
       ).toBeInTheDocument()
+    })
+  })
+
+  /**
+   * [FELA-218](/FELA/issues/FELA-218) — PR #99's review flagged the strip's
+   * own layout as held only by a `dist` measurement, which proves today's
+   * head but nothing past it. `moveMode` is the one place `TaskRow` flips
+   * `flex-wrap`, and that condition leaking onto a neighboring row was a
+   * named risk before the row shipped. className assertions only: jsdom
+   * never lays anything out.
+   */
+  describe('the strip’s own layout (FELA-218)', () => {
+    it('adds `flex-wrap` to the row only once it is lifted, never on a normal row', () => {
+      renderTaskList(makeThree())
+
+      expect(rowFor('Вторая').className).not.toContain('flex-wrap')
+
+      enterMoveMode('Вторая')
+
+      expect(rowFor('Вторая').className).toContain('flex-wrap')
+    })
+
+    it('does not leak `flex-wrap` onto a neighboring row at the same moment', () => {
+      renderTaskList(makeThree())
+
+      enterMoveMode('Вторая')
+
+      expect(rowFor('Первая').className).not.toContain('flex-wrap')
+      expect(rowFor('Третья').className).not.toContain('flex-wrap')
+    })
+
+    it('gives the strip `basis-full`, so it takes its own line rather than the title column', () => {
+      renderTaskList(makeThree())
+
+      enterMoveMode('Вторая')
+
+      const strip = screen.getByRole('button', { name: 'Переместить вверх: Вторая' })
+        .parentElement as HTMLElement
+      expect(strip.className).toContain('basis-full')
+    })
+
+    it('gives «Готово» the primary variant and «Отмена» the ghost variant', () => {
+      renderTaskList(makeThree())
+
+      enterMoveMode('Вторая')
+
+      const done = screen.getByRole('button', { name: 'Готово' })
+      const cancel = screen.getByRole('button', { name: 'Отмена' })
+      for (const token of BUTTON_VARIANT_CLASSES.primary.split(' ')) {
+        expect(done.className).toContain(token)
+      }
+      for (const token of BUTTON_VARIANT_CLASSES.ghost.split(' ')) {
+        expect(cancel.className).toContain(token)
+      }
     })
   })
 
