@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion'
-import { useId, useRef } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
+import { IconButton } from '../../components/IconButton'
+import { announce } from '../../lib/announce'
 import { cn } from '../../lib/cn'
 import { useDismissable } from '../../lib/useDismissable'
 import { useMediaQuery } from '../../lib/useMediaQuery'
@@ -16,6 +18,23 @@ export interface ComposerSheetProps {
   /** The `Fab` that opened the sheet — where Esc puts focus back. */
   triggerRef: RefObject<HTMLElement | null>
   onClose: () => void
+}
+
+/** Straight-line glyphs in `Fab`'s `PlusIcon` style — no new icon component. */
+function ClearIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" aria-hidden="true">
+      <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function UndoIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" aria-hidden="true">
+      <path d="M4 10h12M4 10l5-5M4 10l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
 }
 
 /**
@@ -45,8 +64,56 @@ export function ComposerSheet({ form, triggerRef, onClose }: ComposerSheetProps)
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const errorId = useId()
 
+  // FELA-103: the one-slot clear/undo button lives only here, not in
+  // `useComposerForm` — it never needs to survive a sheet close (the state
+  // resets for free on unmount) and the desktop panel doesn't have it.
+  const [savedText, setSavedText] = useState<string | null>(null)
+  const restoreCaretRef = useRef(false)
+
   useDismissable({ onDismiss: onClose, returnFocusTo: triggerRef })
   useOutsideClick({ onOutsideClick: onClose, inside: [panelRef] })
+
+  // Moves the caret to the end after "undo" restores the saved text. Can't
+  // grab a ref from `ComposerTextarea` (it isn't forwarded, and spec 4.1
+  // keeps that component untouched), so this reaches into the panel's DOM
+  // instead — safe because focus never left the textarea (see
+  // `onPointerDown` below), so it's always the active element here.
+  useLayoutEffect(() => {
+    if (!restoreCaretRef.current) return
+    restoreCaretRef.current = false
+    const textarea = panelRef.current?.querySelector('textarea')
+    if (textarea) {
+      const end = textarea.value.length
+      textarea.setSelectionRange(end, end)
+    }
+  }, [form.title])
+
+  const slot: 'clear' | 'undo' | 'hidden' = form.title !== '' ? 'clear' : savedText !== null ? 'undo' : 'hidden'
+
+  function handleClear() {
+    setSavedText(form.title)
+    form.setTitle('')
+    announce('Поле очищено')
+  }
+
+  function handleUndo() {
+    if (savedText === null) return
+    form.setTitle(savedText)
+    setSavedText(null)
+    restoreCaretRef.current = true
+    announce('Текст возвращён')
+  }
+
+  // Only the textarea needs to drop the saved text on real typing — chips and
+  // the submit button never call `setTitle`. Clear/undo call `form.setTitle`
+  // directly (bypassing this wrapper) so they don't erase the value they just set.
+  const textareaForm: ComposerFormController = {
+    ...form,
+    setTitle(value) {
+      setSavedText(null)
+      form.setTitle(value)
+    },
+  }
 
   return (
     <div className="fixed inset-0 z-(--z-modal) flex flex-col justify-end">
@@ -72,12 +139,33 @@ export function ComposerSheet({ form, triggerRef, onClose }: ComposerSheetProps)
         <div className="flex flex-col gap-(--space-2)">
           <div
             className={cn(
-              'rounded-(--radius-md) border bg-surface-1 px-(--space-3) py-(--space-3) transition-colors duration-(--duration-fast) ease-standard',
+              'flex items-start gap-(--space-2) rounded-(--radius-md) border bg-surface-1 px-(--space-3) py-(--space-3) transition-colors duration-(--duration-fast) ease-standard',
               form.error ? 'border-danger' : form.isFocused ? 'border-accent-text' : 'border-surface-border',
               form.isFocused && 'shadow-glow-accent',
             )}
           >
-            <ComposerTextarea form={form} errorId={errorId} autoFocus className="w-full" />
+            <ComposerTextarea form={textareaForm} errorId={errorId} autoFocus className="min-w-0 flex-1" />
+
+            {/* Opacity only — framer-motion's own transition, not a CSS one,
+                so the global reduced-motion floor (base.css) that pins real
+                CSS transitions to 120ms can't fight the instant appearance
+                acceptance criterion 14 asks for. */}
+            <motion.span
+              className="-my-3 -mr-2 inline-flex"
+              animate={{ opacity: slot === 'hidden' ? 0 : 1 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.14 }}
+            >
+              <IconButton
+                icon={slot === 'undo' ? <UndoIcon /> : <ClearIcon />}
+                aria-label={slot === 'undo' ? 'Вернуть текст' : 'Очистить поле'}
+                variant="ghost"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={slot === 'undo' ? handleUndo : handleClear}
+                aria-hidden={slot === 'hidden' ? true : undefined}
+                tabIndex={slot === 'hidden' ? -1 : undefined}
+                className={slot === 'hidden' ? 'pointer-events-none' : undefined}
+              />
+            </motion.span>
           </div>
 
           <ComposerFieldMeta form={form} errorId={errorId} />

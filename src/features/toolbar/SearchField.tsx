@@ -85,7 +85,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
           type="button"
           aria-label="Очистить поиск"
           onClick={() => onChange('')}
-          className="inline-flex size-6 shrink-0 items-center justify-center rounded-(--radius-xs) text-tertiary transition-colors duration-(--duration-fast) ease-standard hover:text-secondary"
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-(--radius-xs) text-tertiary transition-colors duration-(--duration-fast) ease-standard hover:text-secondary sm:size-6"
         >
           <ClearIcon />
         </button>

@@ -26,7 +26,7 @@ export function ComposerSubmit({ form, className }: ComposerSubmitProps) {
       aria-label="Добавить задачу в список"
       style={{ backgroundImage: 'var(--gradient-accent)' }}
       className={cn(
-        'flex size-10 shrink-0 items-center justify-center rounded-full text-accent-contrast transition-opacity duration-(--duration-fast) ease-standard disabled:cursor-not-allowed disabled:opacity-45',
+        'flex size-11 shrink-0 items-center justify-center rounded-full text-accent-contrast transition-opacity duration-(--duration-fast) ease-standard disabled:cursor-not-allowed disabled:opacity-45 sm:size-10',
         className,
       )}
     >

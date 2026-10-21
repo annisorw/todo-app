@@ -61,4 +61,35 @@ describe('PrioritySelect', () => {
     await user.keyboard('{ArrowDown}')
     expect(screen.getByRole('menuitem', { name: /Средний/ })).toHaveFocus()
   })
+
+  it('hangs the menu from the left edge by default', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('button', { name: 'Приоритет' }))
+
+    const wrapper = screen.getByRole('menu').parentElement
+    expect(wrapper).toHaveClass('left-0')
+    expect(wrapper).not.toHaveClass('right-0')
+  })
+
+  it('hangs the menu from the right edge when align="end" (FELA-124)', async () => {
+    const user = userEvent.setup()
+    function EndHarness() {
+      const [value, setValue] = useState<Priority>('none')
+      return (
+        <>
+          <PrioritySelect value={value} onChange={setValue} align="end" />
+          <LiveRegion />
+        </>
+      )
+    }
+    render(<EndHarness />)
+
+    await user.click(screen.getByRole('button', { name: 'Приоритет' }))
+
+    const wrapper = screen.getByRole('menu').parentElement
+    expect(wrapper).toHaveClass('right-0')
+    expect(wrapper).not.toHaveClass('left-0')
+  })
 })

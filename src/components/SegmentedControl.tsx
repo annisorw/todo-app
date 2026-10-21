@@ -118,7 +118,7 @@ export function SegmentedControl({
             tabIndex={selected ? 0 : -1}
             onClick={() => onSelect(option.id)}
             className={cn(
-              'relative isolate flex h-8 min-w-max flex-1 items-center justify-center gap-(--space-2) rounded-(--radius-sm) px-(--space-3) text-label transition-colors duration-(--duration-fast) ease-standard sm:flex-initial',
+              'relative isolate flex h-11 min-w-max flex-1 items-center justify-center gap-(--space-2) rounded-(--radius-sm) px-(--space-3) text-label transition-colors duration-(--duration-fast) ease-standard sm:h-8 sm:flex-initial',
               selected ? 'text-primary' : 'text-secondary hover:text-primary',
             )}
           >
