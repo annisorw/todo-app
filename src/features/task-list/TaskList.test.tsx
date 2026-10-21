@@ -111,6 +111,160 @@ describe('TaskList', () => {
     })
   })
 
+  describe('task-settle keeps the original slot (FELA-126 audit)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      stubMatchMedia(true)
+    })
+
+    // Scoped to the active `<ul>` — `getAllByRole('listitem')` unscoped
+    // would also pick up `CompletedSection`'s own `<li>`s, and a row mid
+    // `task-delete`/`task-settle` exit animation can still linger in jsdom
+    // (no real rAF under fake timers), so a plain document-wide query can't
+    // tell "moved to Completed" apart from "still active".
+    function activeTitles() {
+      const activeList = document.querySelector<HTMLElement>('ul[aria-label="Задачи"]')
+      if (activeList === null) return []
+      return within(activeList)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent ?? '')
+    }
+
+    it('checking the first of four active tasks keeps it at index 0 until settle, then moves it to Completed', () => {
+      renderTaskList([
+        makeTask({ id: 't1', title: 'Первая' }),
+        makeTask({ id: 't2', title: 'Вторая' }),
+        makeTask({ id: 't3', title: 'Третья' }),
+        makeTask({ id: 't4', title: 'Четвёртая' }),
+      ])
+
+      fireEvent.click(screen.getAllByRole('checkbox')[0]!)
+
+      // Immediately after the check: still slot 0, DOM is A,B,C,D — not
+      // B,C,D,A (the audited regression).
+      let titles = activeTitles()
+      expect(titles[0]).toContain('Первая')
+      expect(titles[1]).toContain('Вторая')
+
+      act(() => {
+        vi.advanceTimersByTime(599)
+      })
+      titles = activeTitles()
+      expect(titles[0]).toContain('Первая')
+      expect(screen.queryByRole('heading', { name: 'Выполнено' })).not.toBeInTheDocument()
+
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      // Assert via the Completed section specifically, not the whole
+      // document: the exiting active-list copy can still linger in jsdom
+      // mid animation (no real rAF under fake timers), same as the
+      // existing "checking a task off" test above.
+      const completedSection = document.querySelector('section[aria-label="Выполнено"]')
+      expect(completedSection?.textContent).toContain('Первая')
+    })
+
+    it('checking a middle row of four leaves its neighbours in place until settle', () => {
+      renderTaskList([
+        makeTask({ id: 't1', title: 'Первая' }),
+        makeTask({ id: 't2', title: 'Вторая' }),
+        makeTask({ id: 't3', title: 'Третья' }),
+        makeTask({ id: 't4', title: 'Четвёртая' }),
+      ])
+
+      fireEvent.click(screen.getAllByRole('checkbox')[1]!) // "Вторая"
+
+      const titles = activeTitles()
+      expect(titles[0]).toContain('Первая')
+      expect(titles[1]).toContain('Вторая')
+      expect(titles[2]).toContain('Третья')
+      expect(titles[3]).toContain('Четвёртая')
+    })
+
+    it('switching the filter during the delay drops the stale snapshot instead of hiding the task', () => {
+      seed([
+        makeTask({ id: 't1', title: 'Первая' }),
+        makeTask({ id: 't2', title: 'Вторая', completedAt: '2026-10-20T10:00:00.000Z' }),
+      ])
+
+      const { rerender } = render(
+        <TaskStoreProvider>
+          <ToastProvider>
+            <LiveRegion />
+            <Harness filter="active" />
+          </ToastProvider>
+        </TaskStoreProvider>,
+      )
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Первая' }))
+      expect(screen.getByText('Первая')).toBeInTheDocument()
+
+      // The board switches to "Готовые" before the 600ms settle fires. The
+      // settling snapshot was taken under `filter: 'active'`, so it must
+      // not leak into this new view in either direction: not shown as a
+      // stray active row, and not hidden from Completed (the audited bug —
+      // the old code excluded it from Completed purely because it was
+      // still "in settling", regardless of which filter that settling
+      // snapshot belonged to).
+      rerender(
+        <TaskStoreProvider>
+          <ToastProvider>
+            <LiveRegion />
+            <Harness filter="completed" />
+          </ToastProvider>
+        </TaskStoreProvider>,
+      )
+
+      // The real point of this test: Completed must show it, not that the
+      // active `<ul>` is literally absent — framer-motion's exit animation
+      // can leave a dying node mounted under fake timers (no real rAF in
+      // jsdom), independent of this component's own display logic.
+      const completedSection = document.querySelector('section[aria-label="Выполнено"]')
+      expect(completedSection?.textContent).toContain('Первая')
+      expect(completedSection?.textContent).toContain('Вторая')
+
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      expect(document.querySelector('section[aria-label="Выполнено"]')?.textContent).toContain('Первая')
+    })
+
+    it('deleting a task during the delay removes it from the store immediately, with no trace in Completed', () => {
+      // Store-level check rather than a DOM-text query: a row mid exit
+      // animation can still linger in jsdom under fake timers (see
+      // `activeTitles`' comment above), which would make a plain
+      // `queryByText` assertion flaky independent of this logic.
+      function Probe() {
+        const { tasks } = useTaskStore()
+        return <span data-testid="store-task-ids">{tasks.map((task) => task.id).join(',')}</span>
+      }
+
+      seed([makeTask({ id: 't1', title: 'Первая' }), makeTask({ id: 't2', title: 'Вторая' })])
+      render(
+        <TaskStoreProvider>
+          <ToastProvider>
+            <LiveRegion />
+            <Harness />
+            <Probe />
+          </ToastProvider>
+        </TaskStoreProvider>,
+      )
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Первая' }))
+
+      const row = screen.getByText('Первая').closest('li')!
+      fireEvent.click(within(row).getByRole('button', { name: /Действия с задачей/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Удалить' }))
+
+      expect(screen.getByTestId('store-task-ids')).toHaveTextContent('t2')
+
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      expect(document.querySelector('section[aria-label="Выполнено"]')?.textContent ?? '').not.toContain('Первая')
+    })
+  })
+
   describe('editing all three fields (acceptance criteria 5, 29, 32)', () => {
     beforeEach(() => {
       stubMatchMedia(true)
