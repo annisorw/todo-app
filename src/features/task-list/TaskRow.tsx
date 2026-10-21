@@ -610,7 +610,11 @@ export function TaskRow({
         setIsDragging(false)
         reorder.onDragEnd()
       }}
-      className={cn(shellClassName, lifted && 'z-(--z-drag)')}
+      // `Reorder.Item` writes its own inline `z-index` (`unset` at rest, `1`
+      // while dragging) after `...style`, so — same as `--z-content` above —
+      // an unmarked `z-(--z-drag)` utility never beats it: the dragged row
+      // kept painting under the sticky toolbar mid-drag. `!` is required.
+      className={cn(shellClassName, lifted && 'z-(--z-drag)!')}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, height: 0, transition: EXIT_TRANSITION }}
