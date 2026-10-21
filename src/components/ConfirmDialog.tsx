@@ -9,6 +9,7 @@ export interface ConfirmDialogProps {
   title: string
   body?: string
   confirmLabel: string
+  cancelLabel: string
   /** @default 'danger' */
   confirmVariant?: ButtonVariant
   onConfirm: () => void
@@ -29,6 +30,7 @@ export function ConfirmDialog({
   title,
   body,
   confirmLabel,
+  cancelLabel,
   confirmVariant = 'danger',
   onConfirm,
   onCancel,
@@ -40,6 +42,7 @@ export function ConfirmDialog({
       title={title}
       body={body}
       confirmLabel={confirmLabel}
+      cancelLabel={cancelLabel}
       confirmVariant={confirmVariant}
       onConfirm={onConfirm}
       onCancel={onCancel}
@@ -55,6 +58,7 @@ function ConfirmDialogPanel({
   title,
   body,
   confirmLabel,
+  cancelLabel,
   confirmVariant,
   onConfirm,
   onCancel,
@@ -65,10 +69,11 @@ function ConfirmDialogPanel({
   const confirmRef = useRef<HTMLButtonElement>(null)
   const triggerRef = useRef<Element | null>(null)
 
-  // Esc приходит от единственного владельца (`lib/dismissStack.ts`), поэтому
-  // попап, открытый внутри диалога, забирает первое нажатие, а диалог под ним
-  // закрывается только следующим. Без `returnFocusTo`: фокус возвращает эффект
-  // ниже при размонтировании, а ссылка хуку вернула бы его второй раз.
+  // Esc comes from the single owner (`lib/dismissStack.ts`), so a popover
+  // opened inside the dialog takes the first press, and the dialog beneath
+  // it closes only on the next one. No `returnFocusTo`: the effect below
+  // returns focus on unmount, and passing the ref to the hook too would
+  // return it a second time.
   useDismissable({ onDismiss: onCancel })
 
   useEffect(() => {
@@ -80,8 +85,8 @@ function ConfirmDialogPanel({
     }
   }, [])
 
-  // Только ловушка Tab. Esc сюда не доходит: стек гасит нажатие на `document`
-  // в фазе перехвата, то есть раньше, чем React доберётся до этого дерева.
+  // Tab trap only. Esc never reaches here: the stack swallows the keypress
+  // on `document` during the capture phase, before React gets to this tree.
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Tab') return
 
@@ -122,7 +127,7 @@ function ConfirmDialogPanel({
 
         <div className="mt-(--space-6) flex justify-end gap-(--space-3)">
           <Button ref={cancelRef} variant="secondary" onClick={onCancel}>
-            Отмена
+            {cancelLabel}
           </Button>
           <Button ref={confirmRef} variant={confirmVariant} onClick={onConfirm}>
             {confirmLabel}

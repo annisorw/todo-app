@@ -21,6 +21,7 @@ function Harness() {
         open={open}
         title="Удалить все выполненные (3)?"
         confirmLabel="Удалить 3 задачи"
+        cancelLabel="Отмена"
         onConfirm={onConfirm}
         onCancel={onCancel}
       />
@@ -35,6 +36,7 @@ describe('ConfirmDialog', () => {
         open={false}
         title="Удалить все выполненные (3)?"
         confirmLabel="Удалить 3 задачи"
+        cancelLabel="Отмена"
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -48,6 +50,7 @@ describe('ConfirmDialog', () => {
         open
         title="Удалить все выполненные (3)?"
         confirmLabel="Удалить 3 задачи"
+        cancelLabel="Отмена"
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -59,6 +62,30 @@ describe('ConfirmDialog', () => {
     expect(screen.getByRole('button', { name: 'Удалить 3 задачи' })).toBeInTheDocument()
   })
 
+  it('renders an arbitrary cancel label, focuses it first, and calls onCancel (not onConfirm) once', async () => {
+    const user = userEvent.setup()
+    const onConfirm = vi.fn()
+    const onCancel = vi.fn()
+    render(
+      <ConfirmDialog
+        open
+        title="Удалить все выполненные (3)?"
+        confirmLabel="Удалить 3 задачи"
+        cancelLabel="Не сейчас"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    )
+
+    const cancel = screen.getByRole('button', { name: 'Не сейчас' })
+    expect(cancel).toHaveFocus()
+
+    await user.click(cancel)
+
+    expect(onCancel).toHaveBeenCalledOnce()
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
   it('renders the passed body under the title, with aria-describedby pointing at it', () => {
     render(
       <ConfirmDialog
@@ -66,6 +93,7 @@ describe('ConfirmDialog', () => {
         title="Выгрузить карантинную копию?"
         body="Файл скачается в формате JSON."
         confirmLabel="Выгрузить"
+        cancelLabel="Отмена"
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -82,6 +110,7 @@ describe('ConfirmDialog', () => {
         open
         title="Удалить все выполненные (3)?"
         confirmLabel="Удалить 3 задачи"
+        cancelLabel="Отмена"
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -96,6 +125,7 @@ describe('ConfirmDialog', () => {
         open
         title="Удалить все выполненные (3)?"
         confirmLabel="Удалить 3 задачи"
+        cancelLabel="Отмена"
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -110,6 +140,7 @@ describe('ConfirmDialog', () => {
         open
         title="Выгрузить карантинную копию?"
         confirmLabel="Выгрузить"
+        cancelLabel="Отмена"
         confirmVariant="primary"
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
@@ -128,6 +159,7 @@ describe('ConfirmDialog', () => {
         open
         title="Удалить все выполненные (3)?"
         confirmLabel="Удалить 3 задачи"
+        cancelLabel="Отмена"
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -155,6 +187,7 @@ describe('ConfirmDialog', () => {
         open
         title="Удалить все выполненные (3)?"
         confirmLabel="Удалить 3 задачи"
+        cancelLabel="Отмена"
         onConfirm={vi.fn()}
         onCancel={onCancel}
       />,
@@ -173,6 +206,7 @@ describe('ConfirmDialog', () => {
         open
         title="Удалить все выполненные (3)?"
         confirmLabel="Удалить 3 задачи"
+        cancelLabel="Отмена"
         onConfirm={onConfirm}
         onCancel={vi.fn()}
       />,
@@ -243,6 +277,7 @@ function DialogWithMenu() {
         open={dialogOpen}
         title="Удалить все выполненные (3)?"
         confirmLabel="Удалить 3 задачи"
+        cancelLabel="Отмена"
         onConfirm={vi.fn()}
         onCancel={() => setDialogOpen(false)}
       />

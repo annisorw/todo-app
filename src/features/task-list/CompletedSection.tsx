@@ -96,6 +96,7 @@ export function CompletedSection({
         open={confirmOpen}
         title={`Удалить все выполненные (${totalCompletedCount})?`}
         confirmLabel={`Удалить ${totalCompletedCount} ${pluralizeTasks(totalCompletedCount)}`}
+        cancelLabel="Отмена"
         onConfirm={handleConfirm}
         onCancel={() => setConfirmOpen(false)}
       />
