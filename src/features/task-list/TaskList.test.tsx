@@ -625,4 +625,72 @@ describe('TaskList', () => {
       expect(screen.getByText('Пока нет активных задач.')).toBeInTheDocument()
     })
   })
+
+  describe('mobile row menu button (FELA-120, design-spec 3.11/3.15/6.2)', () => {
+    beforeEach(() => {
+      stubMatchMedia(false)
+    })
+
+    it('opens the row Menu from a tap on the persistent "more" button, with no swipe or long press', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ })
+      await user.click(moreButton)
+
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: 'Изменить' })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: 'Удалить' })).toBeInTheDocument()
+    })
+
+    it('meets the 44×44 mobile touch target (design-spec 3.6) and names the task in the accessible name', () => {
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ })
+      expect(moreButton.className).toContain('size-11')
+    })
+
+    it('reaches "Удалить" via a tap on the button, with no gesture involved', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      await user.click(screen.getByRole('button', { name: /Действия с задачей/ }))
+      await user.click(screen.getByRole('menuitem', { name: 'Удалить' }))
+
+      expect(screen.queryByText('Купить молоко')).not.toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent('Задача удалена: «Купить молоко»')
+    })
+
+    it('Esc closes the menu and returns focus to the "more" button that opened it', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей/ })
+      await user.click(moreButton)
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+
+      await user.keyboard('{Escape}')
+
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+      expect(moreButton).toHaveFocus()
+    })
+
+    it('keeps the long-press/swipe gesture working, and returns focus to the checkbox on Esc when the gesture opened it', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const row = screen.getByText('Купить молоко').closest('.task-row')
+      if (row === null) throw new Error('row not found')
+
+      fireEvent.touchStart(row, { touches: [{ clientX: 200, clientY: 50 }] })
+      fireEvent.touchEnd(row, { changedTouches: [{ clientX: 100, clientY: 50 }] })
+
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+
+      await user.keyboard('{Escape}')
+
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+      expect(screen.getByRole('checkbox')).toHaveFocus()
+    })
+  })
 })
