@@ -271,6 +271,14 @@ export function TaskList({
                   onHandleBlur: () => reorder.handleHandleBlur(task.id),
                   onDragStart: () => reorder.handleDragStart(task.id),
                   onDragEnd: reorder.handleDragEnd,
+                  // design-spec 6.4's intents, for the mobile move mode
+                  // ([FELA-177](/FELA/issues/FELA-177)). The same four the
+                  // handle's key decoder calls, so both modes write the order
+                  // and announce the step through one implementation.
+                  onGrab: () => reorder.grab(task.id),
+                  onStep: (delta) => reorder.step(task.id, delta),
+                  onDrop: () => reorder.drop(task.id),
+                  onCancel: () => reorder.cancel(task.id),
                 }}
               />
             ))}
