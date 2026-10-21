@@ -301,4 +301,64 @@ describe('mobile move mode (design-spec 6.4, v1.10)', () => {
       expect(readTasks().tasks.map((task) => task.title)).toEqual(['Первая', 'Вторая', 'Третья'])
     })
   })
+
+  /**
+   * v1.10 puts the handle back in the row for the duration of the mode, so
+   * 6.4's keyboard path reaches it on a phone too — with a physical keyboard
+   * or switch access, Shift+Tab off the strip lands there. `Space` and `Esc`
+   * pressed on the handle end the mode without going through the strip, and
+   * the mode has to survive both.
+   */
+  describe('the handle inside the mode (design-spec 6.4)', () => {
+    function handleFor(title: string): HTMLElement {
+      return screen.getByRole('button', { name: `Переместить задачу: ${title}` })
+    }
+
+    it('cancels once on Esc instead of reverting its own revert', () => {
+      renderTaskList(makeThree())
+
+      enterMoveMode('Первая')
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить ниже: Первая' }))
+      expect(renderedOrder()).toEqual(['Вторая', 'Первая', 'Третья'])
+
+      fireEvent.keyDown(handleFor('Первая'), { key: 'Escape' })
+
+      expect(renderedOrder()).toEqual(['Первая', 'Вторая', 'Третья'])
+      expect(announcement()).toBe('Перемещение отменено, позиция 1')
+      expect(document.activeElement).toBe(moreFor('Первая'))
+    })
+
+    it('commits on Space and returns focus to `more` rather than dropping it on <body>', () => {
+      renderTaskList(makeThree())
+
+      enterMoveMode('Первая')
+      fireEvent.click(screen.getByRole('button', { name: 'Переместить ниже: Первая' }))
+
+      fireEvent.keyDown(handleFor('Первая'), { key: ' ' })
+
+      expect(renderedOrder()).toEqual(['Вторая', 'Первая', 'Третья'])
+      expect(screen.queryByRole('button', { name: 'Готово' })).not.toBeInTheDocument()
+      expect(document.activeElement).toBe(moreFor('Первая'))
+    })
+  })
+
+  /**
+   * The list is one Tab stop: exactly one row carries `tabIndex={0}` and every
+   * control in the others is `-1`. The strip is part of its row and has to
+   * obey that, or Tab out of «Готово» would skip the `more` button the mode
+   * returns focus to.
+   */
+  describe('roving focus (architecture invariant)', () => {
+    it('gives the strip the row’s tabIndex and makes the lifted row the roving row', () => {
+      renderTaskList(makeThree())
+
+      enterMoveMode('Вторая')
+
+      for (const name of ['Переместить выше: Вторая', 'Переместить ниже: Вторая', 'Готово']) {
+        expect(screen.getByRole('button', { name }).getAttribute('tabindex')).toBe('0')
+      }
+      expect(moreFor('Вторая').getAttribute('tabindex')).toBe('0')
+      expect(moreFor('Третья').getAttribute('tabindex')).toBe('-1')
+    })
+  })
 })

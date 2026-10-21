@@ -363,16 +363,28 @@ export function TaskRow({
   }
 
   function handleRowKeyDown(event: KeyboardEvent) {
-    if (moveMode && event.key === 'Escape') {
-      // Deliberately not gated on `defaultPrevented`: Esc pressed on the
-      // handle is already cancelled by 6.4's keyboard path on the way up, and
-      // the focus return belongs to the mode either way. `cancel` is scoped
-      // to the held row, so the second call is a no-op, not a second revert.
-      // Prevented so `useGlobalShortcuts`' «снять выделение» does not blur the
-      // button we are putting focus back on.
-      event.preventDefault()
-      exitMoveMode(false)
-      return
+    // design-spec 6.4 — v1.10 keeps the handle mounted for the duration of the
+    // mode, so the handle's own keyboard path also ends it: `Space` commits,
+    // `Esc` puts the row back. Both unmount the handle, which would leave
+    // focus on `<body>`, so the focus return belongs here for either path.
+    //
+    // The intent itself must not run twice. `useTaskReorder` marks the key
+    // handled, so `defaultPrevented` tells "the handle already did it" from
+    // "nobody did it yet" — the convention `useRowShortcuts` already follows.
+    // A second `cancel` is not a no-op: it reads the pre-revert order off the
+    // props of this same render and moves the row back again.
+    if (moveMode && (event.key === 'Escape' || event.key === ' ')) {
+      if (event.defaultPrevented) {
+        moreRef.current?.focus()
+        return
+      }
+      if (event.key === 'Escape') {
+        // Prevented so `useGlobalShortcuts`' «снять выделение» does not blur
+        // the button we are putting focus back on.
+        event.preventDefault()
+        exitMoveMode(false)
+        return
+      }
     }
     onRowKeyDown(event)
   }
@@ -744,20 +756,36 @@ function RowBody({
             nothing interactive is hidden while the row is held. Each button
             calls one of 6.4's intents; the announcements come from
             `useTaskReorder`, so they are word-for-word the keyboard mode's.
+
+            `tabIndex` / `onFocus` are the row's, like every other control
+            here: the strip is part of its row, so the list stays one Tab stop
+            and focusing ↑ on entry moves the roving index onto this row —
+            without which `more`, the button 6.4 returns focus to, would stay
+            `-1` and Tab out of «Готово» would leave the list.
           */
           <div className="mt-(--space-1) flex items-center gap-(--space-2)">
             <IconButton
               ref={moveUpRef}
               icon={<ArrowUpIcon />}
               aria-label={`Переместить выше: ${task.title}`}
+              tabIndex={tabIndex}
+              onFocus={onFocus}
               onClick={() => onMoveStep(-1)}
             />
             <IconButton
               icon={<ArrowDownIcon />}
               aria-label={`Переместить ниже: ${task.title}`}
+              tabIndex={tabIndex}
+              onFocus={onFocus}
               onClick={() => onMoveStep(1)}
             />
-            <Button size="sm" variant="secondary" onClick={onMoveDone}>
+            <Button
+              size="sm"
+              variant="secondary"
+              tabIndex={tabIndex}
+              onFocus={onFocus}
+              onClick={onMoveDone}
+            >
               Готово
             </Button>
           </div>
