@@ -32,9 +32,12 @@ function CheckIcon() {
  * 32/44 px target guidance, so the native input's hit area is the larger
  * 32×32 desktop / 44×44 mobile box, still above the 24×24 WCAG 2.2 floor
  * though smaller than `IconButton`'s 40/44, with the small circle centered
- * inside it. The input uses `opacity-0` (not `display: none`)
- * so it stays focusable, and the global `:focus-visible` ring in `base.css`
- * lands on that real hit area.
+ * inside it. The input uses `opacity-0` (not `display: none`) so it stays
+ * focusable, but that same opacity also erases the global `:focus-visible`
+ * ring from `base.css` — the ring paints, just on a fully transparent box
+ * (FELA-119). So the visible circle carries its own `peer-focus-visible`
+ * ring instead, same 2px/2px as the spec default, and the input keeps only
+ * its (invisible) native one.
  */
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox(
   { checked, label, disabled, className, ...rest },
@@ -58,7 +61,13 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           ...(checked ? { backgroundImage: 'var(--gradient-accent)' } : {}),
         }}
         className={cn(
-          'pointer-events-none inline-flex size-(--size-checkbox) items-center justify-center rounded-full border-control-border transition-colors duration-(--duration-fast) ease-standard',
+          // `transition-[border-color]`, not Tailwind's `transition-colors`: that utility's
+          // property list also includes `outline-color` (FELA-119), which would fade the
+          // focus ring in instead of showing it instantly as spec 7 ("кольцо не анимируется")
+          // requires. Only `border-color` actually changes state here — the checked gradient
+          // is a `background-image` swap via inline style, which transitions don't animate.
+          'pointer-events-none inline-flex size-(--size-checkbox) items-center justify-center rounded-full border-control-border transition-[border-color] duration-(--duration-fast) ease-standard',
+          'peer-focus-visible:[outline:2px_solid_var(--color-focus-ring)] peer-focus-visible:[outline-offset:2px]',
           checked ? 'border-transparent shadow-glow-accent' : 'peer-hover:border-text-tertiary',
           disabled && 'opacity-45',
         )}
