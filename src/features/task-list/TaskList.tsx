@@ -171,7 +171,9 @@ export function TaskList({
 
   // design-spec 3.11a `saving`: a failed write leaves the editor open with
   // its draft intact — the error is already visible through `ErrorBanner`
-  // (FELA-127). Only a confirmed write closes it.
+  // (FELA-127). Only a confirmed write closes it; `saveTaskEdit` itself
+  // withholds the store update until then, so «Отмена» after a failed save
+  // still has the pre-edit task to fall back to (FELA-211).
   function handleSave(id: string, patch: TaskPatch) {
     const error = saveTaskEdit(id, patch)
     if (error === null) setEditingId(null)

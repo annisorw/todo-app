@@ -53,9 +53,9 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
    * above this writes immediately instead of waiting out the debounce.
    *
    * `nextTasks` is computed with the same pure `updateTask` the reducer uses,
-   * not read back from `state.tasks` after the dispatch — React hasn't
-   * committed that update yet when this function returns, so there's no
-   * "second source of data" here, just the one domain call evaluated early.
+   * evaluated against the current `state.tasks` before anything is written
+   * or dispatched — the one domain call stands in for what the reducer would
+   * produce, so there's no "second source of data" here.
    *
    * A patch that changes nothing *and* has nothing outstanding to retry skips
    * the write (spec: unchanged save is a no-op). Otherwise it always writes,
@@ -68,17 +68,26 @@ export function TaskStoreProvider({ children }: { children: ReactNode }) {
    * back to the quarantined bytes. The *returned* value still carries the
    * real write result so `handleSave` closes the editor on a successful
    * save even while that banner stays up.
+   *
+   * [FELA-211](/FELA/issues/FELA-211): `task/edit` only dispatches once the
+   * write actually lands. A failed save must not become visible in the
+   * store — otherwise «Отмена» after that failure has nothing left to
+   * discard, since the draft is already applied. Pressing «Сохранить» again
+   * still retries correctly: `nextTasks` is recomputed from the (unchanged)
+   * `state.tasks` each time, patch and all.
    */
   const saveTaskEdit = useCallback(
     (id: string, patch: TaskPatch): StorageError | null => {
       const nextTasks = updateTask(state.tasks, id, patch)
-      dispatch({ type: 'task/edit', id, patch })
 
       if (nextTasks === state.tasks && state.storageError === null) return null
 
       const error = writeTasks(nextTasks)
       if (state.storageError === null || !isUnreadableError(state.storageError)) {
         dispatch({ type: 'storage/error', error })
+      }
+      if (error === null) {
+        dispatch({ type: 'task/edit', id, patch })
       }
       return error
     },

@@ -617,6 +617,30 @@ describe('TaskList', () => {
       expect(screen.getByText('Купить молоко')).toBeInTheDocument()
     })
 
+    // FELA-211: the gap the test above doesn't cover — pressing «Сохранить»
+    // first (and having it fail) used to apply the edit to the store right
+    // away, so a later «Отмена» had nothing left to roll back. `saveTaskEdit`
+    // now withholds the `task/edit` dispatch until a write actually lands.
+    it('Save (write fails), then Отмена rolls the edit back instead of leaving it applied', async () => {
+      stubMatchMedia(true)
+      const user = userEvent.setup()
+      renderWithStorage(makeTask({ id: 't1', title: 'Купить молоко' }), { writeError: quotaError() })
+
+      await user.dblClick(screen.getByText('Купить молоко'))
+      const textarea = screen.getByRole('textbox', { name: 'Текст задачи' })
+      await user.clear(textarea)
+      await user.type(textarea, 'Купить хлеб')
+
+      await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+      expect(screen.getByTestId('store-error')).toHaveTextContent('quota')
+
+      await user.click(screen.getByRole('button', { name: 'Отмена' }))
+
+      expect(screen.queryByRole('textbox', { name: 'Текст задачи' })).not.toBeInTheDocument()
+      expect(screen.getByText('Купить молоко')).toBeInTheDocument()
+      expect(screen.queryByText('Купить хлеб')).not.toBeInTheDocument()
+    })
+
     /**
      * Review FELA-187, blocker 1: a `'corrupted'` `storageError` is a read
      * failure, not a write failure — `saveTaskEdit` must not clear it or
