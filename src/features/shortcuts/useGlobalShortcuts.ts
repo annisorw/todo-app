@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { Filter } from '../../domain/filters'
 import { isDismissableOpen } from '../../lib/dismissStack'
 import { isTextEntry } from './isTextEntry'
+import { TASK_ROW_SELECTOR } from './taskRowMarker'
 
 export interface GlobalShortcutActions {
   /** `N` — put the caret in the new-task field (desktop) or open the sheet (mobile). */
@@ -12,7 +13,7 @@ export interface GlobalShortcutActions {
   setFilter: (filter: Filter) => void
   /** `?` — the shortcuts cheat sheet (design-spec 3.23 / S12). */
   openShortcuts: () => void
-  /** `Esc` on an empty dismiss stack — clears the search query. */
+  /** `Esc` on an empty dismiss stack, with no row focused — clears the search query. */
   clearSearch: () => void
   /** `Ctrl/Cmd+Z` — the same `task/restoreRemoved` action the undo toast calls. */
   restoreRemoved: () => void
@@ -129,18 +130,23 @@ export function useGlobalShortcuts(actions: GlobalShortcutActions): void {
 
     /**
      * `Esc` with an empty dismiss stack: «закрыть/отменить/очистить» has
-     * nothing left to close, so it clears the search and drops the row's
-     * focus. Never calls `preventDefault` — with nothing open there is no
-     * browser default worth suppressing, and claiming the key would hide it
-     * from anything mounted later.
+     * nothing left to close, so it either drops a row's focus or clears the
+     * search — **one** of the two, never both. Table 6.3 lists `Esc` as a
+     * single action, and doing both meant that pressing it to deselect a row
+     * silently threw away a search query the user never asked to lose.
+     *
+     * Never calls `preventDefault` — with nothing open there is no browser
+     * default worth suppressing, and claiming the key would hide it from
+     * anything mounted later.
      */
     function handleEscape(event: KeyboardEvent): void {
-      latest.current.clearSearch()
-
       const target = event.target
-      if (target instanceof HTMLElement && target.closest('[data-task-row]') !== null) {
+      if (target instanceof HTMLElement && target.closest(TASK_ROW_SELECTOR) !== null) {
         target.blur()
+        return
       }
+
+      latest.current.clearSearch()
     }
 
     document.addEventListener('keydown', handleKeyDown)

@@ -16,6 +16,7 @@ import type { Task, TaskPatch } from '../../domain/task'
 import { cn } from '../../lib/cn'
 import { highlight } from '../../lib/highlight'
 import { useMediaQuery } from '../../lib/useMediaQuery'
+import { taskRowMarker } from '../shortcuts/taskRowMarker'
 import { TaskEditor } from './TaskEditor'
 import { TaskEditorSheet } from './TaskEditorSheet'
 
@@ -234,7 +235,7 @@ export function TaskRow({
     return (
       <motion.li
         ref={rowRef}
-        data-task-row=""
+        {...taskRowMarker}
         onKeyDown={onRowKeyDown}
         // `editor-open` (motion table, section 5): under reduced motion the
         // switch to `TaskEditor`/`TaskEditorSheet` is instant and never
@@ -285,10 +286,10 @@ export function TaskRow({
   return (
     <motion.li
       ref={rowRef}
-      // `data-task-row` marks the row for `useGlobalShortcuts`: `Esc` on an
-      // empty dismiss stack drops focus out of a row («снять выделение»), and
-      // that is the one thing it cannot learn from the React tree.
-      data-task-row=""
+      // Marks the row for `useGlobalShortcuts`: `Esc` on an empty dismiss
+      // stack drops focus out of a row («снять выделение»), and that is the
+      // one thing it cannot learn from the React tree.
+      {...taskRowMarker}
       onKeyDown={onRowKeyDown}
       // `task-settle`/`list-reflow` (motion table, section 5): under reduced
       // motion reordering is instant, so the `layout` interpolation is off.

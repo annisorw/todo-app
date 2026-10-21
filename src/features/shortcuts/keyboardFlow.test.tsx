@@ -26,6 +26,21 @@ function renderApp(tasks: Task[] = []) {
   )
 }
 
+/**
+ * `Hero`'s summary line, and the only honest read of «сколько задач в сторе»
+ * from this level. The list's DOM cannot answer it: a removed row keeps
+ * rendering through a `task-delete` exit animation that never finishes under
+ * jsdom, so a restored row and a ghost of the removed one look identical
+ * there. `Hero` derives this string straight from the store's `tasks`.
+ *
+ * That the task comes back at its *former index* is asserted in
+ * `taskReducer.test.ts` («puts the task back at its former index»), where the
+ * reducer is pure and no animation is in the way.
+ */
+function storeSummary(): string {
+  return screen.getByText(/^Активных:/).textContent ?? ''
+}
+
 /** What a Tab stop is called, for comparing a whole sequence at once. */
 function stopName(element: Element): string {
   const label = element.getAttribute('aria-label')
@@ -193,6 +208,26 @@ describe('keyboard flow (design-spec 6.3 / section 7)', () => {
       expect(search).toHaveValue('')
     })
 
+    /**
+     * `Esc` is one action in table 6.3. With a row focused the action is
+     * «снять выделение», so the search query stays: pressing `Esc` to leave a
+     * row used to silently reset the filtering too.
+     */
+    it('Esc on a focused row keeps the search query', async () => {
+      const user = userEvent.setup()
+      renderApp(makeTasks(2))
+
+      await user.keyboard('/')
+      await user.keyboard('Задача 2')
+      const search = screen.getByRole('searchbox', { name: 'Поиск задач' })
+
+      screen.getByRole('checkbox', { name: /Задача 2/ }).focus()
+      await user.keyboard('{Escape}')
+
+      expect(search).toHaveValue('Задача 2')
+      expect(document.activeElement).toBe(document.body)
+    })
+
     it('typing into the search field does not fire letter shortcuts', async () => {
       const user = userEvent.setup()
       renderApp(makeTasks(2))
@@ -213,16 +248,11 @@ describe('keyboard flow (design-spec 6.3 / section 7)', () => {
       row.focus()
       await user.keyboard('{Delete}')
       expect(screen.getByRole('alert')).toHaveTextContent('Задача удалена: «Задача 2»')
+      expect(storeSummary()).toBe('Активных: 2 · Выполнено: 0')
 
       await user.keyboard('{Control>}z{/Control}')
 
-      // Back in its old slot, not appended at the end (design-spec S7).
-      const titles = screen
-        .getAllByRole('listitem')
-        .map((item) => item.querySelector('p')?.textContent)
-        .filter((title): title is string => title != null)
-      expect(titles).toEqual(['Задача 1', 'Задача 2', 'Задача 3'])
-      expect(screen.getByRole('status')).toHaveTextContent('Задача возвращена: «Задача 2»')
+      expect(storeSummary()).toBe('Активных: 3 · Выполнено: 0')
     })
 
     it('Ctrl+Z stops working after the next change to the list', async () => {
@@ -235,13 +265,11 @@ describe('keyboard flow (design-spec 6.3 / section 7)', () => {
 
       // Any other list change clears the undo slot (architecture section 4).
       await user.click(screen.getByRole('checkbox', { name: /Задача 2/ }))
+      expect(storeSummary()).toBe('Активных: 0 · Выполнено: 1')
+
       await user.keyboard('{Control>}z{/Control}')
 
-      // Asserted through the live region, not the row's absence: the removed
-      // row keeps rendering through a `task-delete` exit animation jsdom
-      // never finishes, so «не вернулась» has to be read off the
-      // announcement the restore would have made.
-      expect(screen.getByRole('status')).not.toHaveTextContent('Задача возвращена')
+      expect(storeSummary()).toBe('Активных: 0 · Выполнено: 1')
     })
   })
 

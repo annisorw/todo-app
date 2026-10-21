@@ -159,7 +159,11 @@ export function TaskList({
    */
   function moveRow(taskId: string, delta: -1 | 1) {
     const visibleIndex = displayActive.findIndex((task) => task.id === taskId)
-    if (visibleIndex === -1) return
+    // `findIndex` misses with `-1` and `displayActive[-1]` is `undefined`, so
+    // one guard covers both «строки нет в этой группе» and the lookup — and
+    // the row found here is the one announced below, not a second search.
+    const moved = displayActive[visibleIndex]
+    if (moved === undefined) return
 
     const neighbour = displayActive[visibleIndex + delta]
     if (neighbour === undefined) return
@@ -169,8 +173,6 @@ export function TaskList({
     if (from === -1 || to === -1) return
 
     moveTask(from, to)
-    const moved = displayActive[visibleIndex]
-    if (moved === undefined) return
     announce(
       `Задача «${moved.title}» перемещена на позицию ${String(visibleIndex + delta + 1)} из ${String(displayActive.length)}`,
     )

@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Filter } from '../../domain/filters'
 import { registerDismissable } from '../../lib/dismissStack'
+import { taskRowMarker } from './taskRowMarker'
 import { useGlobalShortcuts } from './useGlobalShortcuts'
 import type { GlobalShortcutActions } from './useGlobalShortcuts'
 
@@ -19,9 +20,10 @@ function makeActions() {
 type Actions = ReturnType<typeof makeActions>
 
 /**
- * Stands in for the real screen: a search field, a `textarea`, a row marked
- * with `data-task-row` whose focus anchor is a native checkbox (the shape
- * `TaskRow` produces), and a button whose own React handler claims `Escape`
+ * Stands in for the real screen: a search field, a `textarea`, a row carrying
+ * `taskRowMarker` whose focus anchor is a native checkbox and which also holds
+ * a focusable control (the shape `TaskRow` produces — a drag handle and chips
+ * sit inside the row), and a button whose own React handler claims `Escape`
  * the way `Composer`'s textarea does.
  */
 function Harness({ actions }: { actions: GlobalShortcutActions }) {
@@ -32,8 +34,9 @@ function Harness({ actions }: { actions: GlobalShortcutActions }) {
       <input type="search" aria-label="Поиск задач" />
       <textarea aria-label="Текст новой задачи" />
       <ul>
-        <li data-task-row="">
+        <li {...taskRowMarker}>
           <input type="checkbox" aria-label="Задача" />
+          <button type="button" aria-label="Внутри строки" />
         </li>
       </ul>
       <button
@@ -132,8 +135,13 @@ describe('useGlobalShortcuts — the keys from design-spec 6.3', () => {
     expect(actions.clearSearch).toHaveBeenCalledTimes(1)
   })
 
-  it('Esc on a focused row also drops its focus', () => {
-    setup()
+  /**
+   * Table 6.3 gives `Esc` one action, not two. Dropping the row's focus *is*
+   * the action when a row is focused, so the search query — which the user
+   * never asked to lose — has to survive it.
+   */
+  it('Esc on a focused row drops its focus and leaves the search query alone', () => {
+    const actions = setup()
     const checkbox = screen.getByRole('checkbox', { name: 'Задача' })
     checkbox.focus()
     expect(checkbox).toHaveFocus()
@@ -141,6 +149,16 @@ describe('useGlobalShortcuts — the keys from design-spec 6.3', () => {
     fireEvent.keyDown(checkbox, { key: 'Escape', code: 'Escape' })
 
     expect(checkbox).not.toHaveFocus()
+    expect(actions.clearSearch).not.toHaveBeenCalled()
+  })
+
+  it('Esc from a button inside a row counts as the row, not as "nothing open"', () => {
+    const actions = setup()
+    const inRow = screen.getByRole('button', { name: 'Внутри строки' })
+
+    fireEvent.keyDown(inRow, { key: 'Escape', code: 'Escape' })
+
+    expect(actions.clearSearch).not.toHaveBeenCalled()
   })
 
   it('matches letters by physical key, so a Cyrillic layout still works', () => {

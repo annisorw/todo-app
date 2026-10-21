@@ -10,7 +10,6 @@ import { useGlobalShortcuts } from './features/shortcuts/useGlobalShortcuts'
 import { TaskList } from './features/task-list/TaskList'
 import { Toolbar } from './features/toolbar/Toolbar'
 import { useToolbarState } from './features/toolbar/useToolbarState'
-import { announce } from './lib/announce'
 import { AppShell } from './layout/AppShell'
 import type { ShortcutsPanelHandle } from './layout/AppHeader'
 import { Hero } from './layout/Hero'
@@ -31,7 +30,7 @@ import { useTaskStore } from './state/useTaskStore'
  * because it also has to hide `Toolbar`, a sibling.
  */
 function AppBody() {
-  const { tasks, lastRemoved, restoreRemoved } = useTaskStore()
+  const { tasks, restoreRemoved } = useTaskStore()
   const toolbar = useToolbarState(tasks)
   const panelId = useId()
   const tabIdPrefix = useId()
@@ -48,16 +47,15 @@ function AppBody() {
     setFilter: toolbar.setFilter,
     openShortcuts: () => headerRef.current?.openShortcuts(),
     clearSearch: toolbar.clearQuery,
-    // The one undo path: the toast's «Вернуть» dispatches the same
-    // `task/restoreRemoved` (issue point 5). Reading `lastRemoved` first
-    // keeps the key quiet when the slot is empty, so it announces nothing
-    // and restores nothing instead of claiming to have undone something.
-    restoreRemoved: () => {
-      const removed = lastRemoved
-      if (removed === null) return
-      restoreRemoved()
-      announce(`Задача возвращена: «${removed.task.title}»`)
-    },
+    // The one undo path: the toast's «Вернуть» dispatches this same
+    // `task/restoreRemoved` (issue point 5), handed over without a wrapper.
+    //
+    // No guard and no announcement here on purpose. An empty undo slot is
+    // already a no-op inside the reducer, and the announcement belongs to the
+    // action rather than to one of its two call sites — FELA-131 puts it in
+    // `restoreRemoved` in the store, so the toast button and this key get it
+    // exactly once each.
+    restoreRemoved,
   })
 
   const completedCount = tasks.filter(isDone).length
