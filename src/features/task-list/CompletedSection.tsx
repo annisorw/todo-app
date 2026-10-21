@@ -3,8 +3,25 @@ import { useState } from 'react'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import type { Task, TaskPatch } from '../../domain/task'
+import type { RowKeyDownHandler } from '../shortcuts/useRowShortcuts'
 import { TaskRow } from './TaskRow'
 import { useRovingFocus } from './useRovingFocus'
+
+/**
+ * Accusative, as object of "удалить": 1 задачу · 2 задачи · 5 задач · 11
+ * задач · 21 задачу. Same shape as domain/dueDate.ts's day pluralizer, but
+ * the singular form differs because that one is genitive ("на N дней"),
+ * not accusative.
+ */
+function pluralizeTasks(count: number): string {
+  const lastTwo = count % 100
+  if (lastTwo >= 11 && lastTwo <= 14) return 'задач'
+
+  const last = count % 10
+  if (last === 1) return 'задачу'
+  if (last >= 2 && last <= 4) return 'задачи'
+  return 'задач'
+}
 
 export interface CompletedSectionProps {
   completed: Task[]
@@ -20,6 +37,8 @@ export interface CompletedSectionProps {
   query: string
   todayKey: string
   editingId: string | null
+  /** Row-scoped hot keys (`useRowShortcuts`) — declared once in `TaskList` and shared with the active list. */
+  onRowKeyDown: RowKeyDownHandler
   onToggle: (id: string) => void
   onOpenEditor: (id: string) => void
   onCloseEditor: () => void
@@ -48,6 +67,7 @@ export function CompletedSection({
   query,
   todayKey,
   editingId,
+  onRowKeyDown,
   onToggle,
   onOpenEditor,
   onCloseEditor,
@@ -78,7 +98,9 @@ export function CompletedSection({
 
       <ConfirmDialog
         open={confirmOpen}
-        completedCount={totalCompletedCount}
+        title={`Удалить все выполненные (${totalCompletedCount})?`}
+        confirmLabel={`Удалить ${totalCompletedCount} ${pluralizeTasks(totalCompletedCount)}`}
+        cancelLabel="Отмена"
         onConfirm={handleConfirm}
         onCancel={() => setConfirmOpen(false)}
       />
@@ -96,6 +118,9 @@ export function CompletedSection({
               registerRef={(node) => roving.registerRef(task.id, node)}
               onFocus={() => roving.handleFocus(task.id)}
               onKeyDown={(event) => roving.handleKeyDown(event, task.id)}
+              onRowKeyDown={(event) =>
+                onRowKeyDown(event, task.id, () => roving.focusNeighbourOf(task.id))
+              }
               onToggle={() => onToggle(task.id)}
               onOpenEditor={() => onOpenEditor(task.id)}
               onCloseEditor={onCloseEditor}

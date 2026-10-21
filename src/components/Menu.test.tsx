@@ -13,6 +13,9 @@ function Harness({ items, onClose }: { items: MenuItemConfig[]; onClose: () => v
         trigger
       </button>
       <Menu items={items} anchorRef={anchorRef} onClose={onClose} />
+      {/* Stands in for whatever follows the trigger chip in the host's own
+          tab order (e.g. TaskEditor's due-date chip) — FELA-122. */}
+      <button type="button">after</button>
     </>
   )
 }
@@ -40,6 +43,27 @@ describe('Menu', () => {
 
     await user.keyboard('{ArrowUp}')
     expect(screen.getByRole('menuitem', { name: 'Третий' })).toHaveFocus()
+  })
+
+  it('traps Tab/Shift+Tab within the menuitems instead of escaping to the host (FELA-122)', async () => {
+    const user = userEvent.setup()
+    render(<Harness items={makeItems(vi.fn())} onClose={vi.fn()} />)
+
+    expect(screen.getByRole('menuitem', { name: 'Первый' })).toHaveFocus()
+
+    await user.tab({ shift: true })
+    expect(screen.getByRole('menuitem', { name: 'Третий' })).toHaveFocus()
+
+    await user.tab()
+    expect(screen.getByRole('menuitem', { name: 'Первый' })).toHaveFocus()
+
+    await user.tab()
+    await user.tab()
+    expect(screen.getByRole('menuitem', { name: 'Третий' })).toHaveFocus()
+
+    await user.tab()
+    expect(screen.getByRole('menuitem', { name: 'Первый' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'after' })).not.toHaveFocus()
   })
 
   it('closes and returns focus to the trigger on Esc', async () => {

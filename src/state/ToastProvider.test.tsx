@@ -128,6 +128,88 @@ describe('ToastProvider', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('stays paused on mouse leave while focus is still inside (FELA-128)', () => {
+    render(
+      <ToastProvider>
+        <PushButton
+          options={{ variant: 'danger', message: 'Удалено', actionLabel: 'Вернуть', onAction: () => {} }}
+          label="push"
+        />
+      </ToastProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'push' }))
+    const toast = screen.getByRole('alert')
+
+    // Reproduces the audit repro: focus "Вернуть", then hover, then leave
+    // with the mouse while focus is still held.
+    fireEvent.focus(toast)
+    fireEvent.mouseEnter(toast)
+    fireEvent.mouseLeave(toast)
+    advancePastLifetime()
+    expect(screen.getByRole('alert')).toBeInTheDocument() // focus still holds the pause
+
+    fireEvent.blur(toast)
+    advancePastLifetime()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('resumes the remaining time, not a fresh 6s, once the last pause reason clears', () => {
+    render(
+      <ToastProvider>
+        <PushButton
+          options={{ variant: 'danger', message: 'Удалено', actionLabel: 'Вернуть', onAction: () => {} }}
+          label="push"
+        />
+      </ToastProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'push' }))
+    const toast = screen.getByRole('alert')
+
+    advance(2000) // 2s of the 6s lifetime elapses unpaused, 4s left
+
+    fireEvent.focus(toast)
+    fireEvent.mouseEnter(toast)
+    advance(5000) // well past the 4s that remained; paused, so nothing happens
+
+    fireEvent.mouseLeave(toast) // one reason clears, still focused: stays paused
+    advance(1000)
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+
+    fireEvent.blur(toast) // last reason clears: ~4s should remain, not a fresh 6s
+    advance(3999)
+    expect(screen.getByRole('alert')).toBeInTheDocument() // not yet — would be gone if it reset to a fresh 6s+ was already consumed
+
+    advance(1) // completes the remaining ~4s
+    expect(screen.getByRole('alert')).toHaveClass('animate-toast-out')
+
+    advance(TOAST_EXIT_MS)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('does not resume the timer when focus moves between elements inside the toast', () => {
+    render(
+      <ToastProvider>
+        <PushButton
+          options={{ variant: 'danger', message: 'Удалено', actionLabel: 'Вернуть', onAction: () => {} }}
+          label="push"
+        />
+      </ToastProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'push' }))
+    const toast = screen.getByRole('alert')
+    const actionButton = screen.getByRole('button', { name: 'Вернуть' })
+
+    fireEvent.focus(toast)
+    // Focus moves from the toast root to its own action button — the
+    // blur's relatedTarget stays inside the toast, so this must not resume.
+    fireEvent.blur(toast, { relatedTarget: actionButton })
+    advancePastLifetime()
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+  })
+
   it('keeps at most 3 toasts, evicting the oldest', () => {
     render(
       <ToastProvider>
