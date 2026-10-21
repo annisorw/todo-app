@@ -85,8 +85,9 @@ npm run typecheck  # tsc -b, no emit
 npm run test
 ```
 
-Runs the Vitest suite once (no watch mode). On `main` at the time of writing this is 52
-test files and 469 tests, all passing.
+Runs the Vitest suite once (no watch mode) and prints how many files and tests passed.
+That count moves with nearly every PR, so this page does not pin it down — run the
+command to see where `main` stands today.
 
 All four commands above (`lint`, `typecheck`, `test`, `build`) are also the required CI
 checks for every pull request — see [Contributing](#contributing).
@@ -152,28 +153,23 @@ What you can actually do with the app on `main` today:
   mounted in `src/App.tsx`).
 - Set a priority and a due date on a task, shown as tags on its row.
 - Search and filter the list (all / active / completed), each with a visible count.
+- Reorder the active list by dragging a row's drag handle, or with the keyboard:
+  `Space` grabs the focused row, `↑`/`↓` move it, and `Space` drops it (`Esc` cancels);
+  every step is announced for screen readers.
 - Clear all completed tasks at once, behind a confirmation dialog (`CompletedSection`).
-- Undo a delete from the "Вернуть" button on its toast, right after it happens.
+- Undo a delete from the "Вернуть" button on its toast, or with the global `Ctrl`/`Cmd+Z`
+  keyboard shortcut — both call the same action.
+- Press `?`, or the header's shortcuts button, for a panel listing every keyboard
+  shortcut: new task, search, filters, row navigation, edit, delete, undo, move.
 - Switch between light and dark theme; the choice is saved and restored on reload
   (`aurora.theme`), and the correct theme applies before the first paint, with no flash
   of the wrong theme.
+- See the illustrated empty state for an empty list, a search with no matches, or a
+  fully completed list, plus a dedicated first-run state before the first task is added
+  (`EmptyState`).
 - See a graceful error banner if the stored task list on your machine is unreadable,
   with a button that exports the raw backup — when one was saved and is still reachable;
   see [Data storage](#data-storage).
-
-Everything below is part of the design spec (`docs/design-spec.md`) but **not yet wired
-up in `main`** — in progress, do not expect it in a build today:
-
-- A global `Ctrl`/`Cmd+Z` keyboard shortcut for undo (the toast button above already
-  works; only the keyboard path is missing).
-- Manual drag-and-drop reordering of the list, with a keyboard-accessible alternative
-  (every row renders a drag handle, but it is a static, presentational slot with no
-  pointer or keyboard drag logic behind it yet).
-- Keyboard shortcuts in general (the header's shortcuts button already exists but
-  currently opens a placeholder panel that says the real list is coming later).
-- The designed empty states for an empty list, a search with no matches, and a fully
-  completed list (today these fall back to a plain text line, not the illustrated
-  `EmptyState` the design spec calls for).
 
 ## Contributing
 
