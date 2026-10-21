@@ -36,6 +36,21 @@ describe('EmptyState', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
+  it('no-active-matches: names the query, points at Completed, and offers only "Очистить поиск"', async () => {
+    const user = userEvent.setup()
+    const onClearSearch = vi.fn()
+    render(<EmptyState variant="no-active-matches" query="молоко" onClearSearch={onClearSearch} />)
+
+    expect(screen.getByRole('heading', { name: 'По запросу «молоко» нет активных задач' })).toBeInTheDocument()
+    expect(screen.getByText('Совпадения есть только в «Готовые» — они ниже.')).toBeInTheDocument()
+
+    const button = screen.getByRole('button', { name: 'Очистить поиск' })
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+
+    await user.click(button)
+    expect(onClearSearch).toHaveBeenCalledOnce()
+  })
+
   it('no-search-results: names the query, offers "Очистить поиск" always and "Искать во всех" only with a named filter', async () => {
     const user = userEvent.setup()
     const onClearSearch = vi.fn()

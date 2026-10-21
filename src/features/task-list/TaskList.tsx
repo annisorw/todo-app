@@ -235,7 +235,11 @@ export function TaskList({
           <EmptyState variant="no-active" />
         )
       ) : activeSectionEmpty ? (
-        <EmptyState variant="no-active" />
+        query !== '' ? (
+          <EmptyState variant="no-active-matches" query={query} onClearSearch={onClearSearch} />
+        ) : (
+          <EmptyState variant="no-active" />
+        )
       ) : (
         <Reorder.Group
           as="ul"
