@@ -11,9 +11,9 @@ day or week, not a team task tracker.
 > "Features" section below marks what is actually in `main` today versus what is still
 > being built, so this page does not promise more than the app currently does.
 
-<!-- TODO: скриншот -->
+<!-- TODO: скриншот — see [FELA-24](/FELA/issues/FELA-24) -->
 
-<!-- TODO: ссылка на демо -->
+<!-- TODO: ссылка на демо — see [FELA-24](/FELA/issues/FELA-24) -->
 
 ## Tech stack
 
@@ -85,8 +85,8 @@ npm run typecheck  # tsc -b, no emit
 npm run test
 ```
 
-Runs the Vitest suite once (no watch mode). On `main` at the time of writing this is 48
-test files and 423 tests, all passing.
+Runs the Vitest suite once (no watch mode). On `main` at the time of writing this is 52
+test files and 469 tests, all passing.
 
 All four commands above (`lint`, `typecheck`, `test`, `build`) are also the required CI
 checks for every pull request — see [Contributing](#contributing).
@@ -104,58 +104,76 @@ src/
   components/  presentational building blocks (Button, Checkbox, Menu, Toast, ...)
   features/    screen-level logic that connects the store to components (composer, toolbar, ...)
   layout/      page shell, header, animated background, floating action button
-  lib/         small framework-agnostic helpers (debounce, focus/dismiss handling, ...)
+  lib/         small helpers, mostly React hooks (debounce, focus/dismiss handling, ...)
   styles/      the token layer (`tokens.css`) and global CSS (`base.css`)
 ```
 
 The rule that keeps this useful: `domain/` never imports React, and `components/` never
 reads application state directly — a component that needs the task store belongs in
-`features/`, not `components/`. See `docs/ARCHITECTURE.md` §2 for the full rationale and
-`docs/CODE-RULES.md` for the security-relevant rules (what must never turn user text into
-HTML, how search highlighting is required to work, and so on).
+`features/`, not `components/`. `ErrorBanner` (in `components/`) is the one deliberate
+exception: it reads `useTaskStore`/`useToast` directly, because the export button needs
+the live task list and the quarantined backup that only `storage/` keeps — see the
+comment on `ErrorBanner.tsx`. `lib/` is "small helpers", not "framework-agnostic": most of
+it (`useDismissable`, `useDebouncedValue`, `useMediaQuery`, ...) is React hooks; only a
+few modules there (`cn`, `dismissStack`, ...) hold no React import at all. See
+`docs/ARCHITECTURE.md` §2 for the full rationale and `docs/CODE-RULES.md` for the
+security-relevant rules (what must never turn user text into HTML, how search
+highlighting is required to work, and so on).
 
 ## Data storage
 
-Everything lives in the browser's `localStorage`, in two keys:
+Everything lives in the browser's `localStorage`, in three keys:
 
 - `aurora.tasks.v1` — the task list, as `{ "version": 1, "tasks": Task[] }`.
 - `aurora.theme` — the chosen theme, `"light"` or `"dark"`.
+- `aurora.tasks.v1.corrupted` — a quarantine copy of `aurora.tasks.v1`'s raw bytes,
+  written only when a read finds them unreadable (see below).
 
 The list is read once, synchronously, before the first render, and written back with a
 250 ms debounce after every change. Nothing ever leaves the browser: there is no network
 call in the app at all.
 
 **If the stored data is unreadable** (corrupted JSON, tampered by hand, written by a
-different app version), the app does not lose it silently. The unparsed bytes are copied
-first into a quarantine key, `aurora.tasks.v1.corrupted`, before anything else touches
-`aurora.tasks.v1`. The app then starts with an empty list in memory and shows an error
-banner explaining that the stored data could not be read, with a button to export the
-original, untouched bytes from the quarantine copy to a file. This way a bad write never
-destroys data — it only has to be recovered.
+different app version), the app tries to keep it, but that is not a guarantee. On read
+it attempts to copy the unparsed bytes into a third key, `aurora.tasks.v1.corrupted`,
+before anything else touches `aurora.tasks.v1` — but that copy can itself fail (storage
+quota, private-mode restrictions, an unavailable backend), in which case the attempt is
+only logged in development and the original bytes are gone. The app then starts with an
+empty list in memory and shows an error banner explaining that the stored data could not
+be read. The banner's export button downloads the quarantine copy only if one was
+actually saved and is still reachable; otherwise it shows a toast ("Выгружать нечего:
+повреждённые данные не сохранились.") and does not produce a file.
 
 ## Features
 
 What you can actually do with the app on `main` today:
 
+- Add, edit, complete, and delete tasks through the UI (`Composer` and `TaskList` are
+  mounted in `src/App.tsx`).
+- Set a priority and a due date on a task, shown as tags on its row.
+- Search and filter the list (all / active / completed), each with a visible count.
+- Clear all completed tasks at once, behind a confirmation dialog (`CompletedSection`).
+- Undo a delete from the "Вернуть" button on its toast, right after it happens.
 - Switch between light and dark theme; the choice is saved and restored on reload
   (`aurora.theme`), and the correct theme applies before the first paint, with no flash
   of the wrong theme.
-- See a graceful error banner — with a one-click export of the untouched raw data — if
-  the stored task list on your machine is unreadable.
+- See a graceful error banner if the stored task list on your machine is unreadable,
+  with a button that exports the raw backup — when one was saved and is still reachable;
+  see [Data storage](#data-storage).
 
 Everything below is part of the design spec (`docs/design-spec.md`) but **not yet wired
 up in `main`** — in progress, do not expect it in a build today:
 
-- Adding, editing, completing, and deleting tasks through the UI (the composer and task
-  list components exist in the codebase but are not yet mounted into the running app).
-- Priority and due-date tags on tasks.
-- Manual drag-and-drop reordering of the list, with a keyboard-accessible alternative.
-- Search and filtering (all / active / completed) with a visible count per filter.
-- Undo for deletion (toast + `Ctrl/Cmd+Z`), and a confirmation dialog for clearing all
-  completed tasks.
-- Keyboard shortcuts (the header's shortcuts button already exists but currently opens a
-  placeholder panel that says the real list is coming later).
-- Empty states for an empty list, a search with no matches, and a fully completed list.
+- A global `Ctrl`/`Cmd+Z` keyboard shortcut for undo (the toast button above already
+  works; only the keyboard path is missing).
+- Manual drag-and-drop reordering of the list, with a keyboard-accessible alternative
+  (every row renders a drag handle, but it is a static, presentational slot with no
+  pointer or keyboard drag logic behind it yet).
+- Keyboard shortcuts in general (the header's shortcuts button already exists but
+  currently opens a placeholder panel that says the real list is coming later).
+- The designed empty states for an empty list, a search with no matches, and a fully
+  completed list (today these fall back to a plain text line, not the illustrated
+  `EmptyState` the design spec calls for).
 
 ## Contributing
 
