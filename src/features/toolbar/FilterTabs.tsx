@@ -6,10 +6,14 @@ export interface FilterTabsProps {
   filter: Filter
   counts: TaskCounts
   onFilterChange: (filter: Filter) => void
+  /** `aria-controls` target — the list's `role="tabpanel"` (TechLead note on FELA-16/FELA-15). */
+  panelId?: string
+  /** Stable id prefix so the caller can predict the selected tab's id for the panel's `aria-labelledby`. */
+  idPrefix?: string
 }
 
 /** Design-spec 3.9 — binds the three fixed filters to `SegmentedControl`. */
-export function FilterTabs({ filter, counts, onFilterChange }: FilterTabsProps) {
+export function FilterTabs({ filter, counts, onFilterChange, panelId, idPrefix }: FilterTabsProps) {
   const options = FILTER_ORDER.map((id) => ({
     id,
     label: FILTER_LABELS[id],
@@ -22,6 +26,8 @@ export function FilterTabs({ filter, counts, onFilterChange }: FilterTabsProps) 
       options={options}
       selectedId={filter}
       onSelect={(id) => onFilterChange(id as Filter)}
+      panelId={panelId}
+      idPrefix={idPrefix}
     />
   )
 }

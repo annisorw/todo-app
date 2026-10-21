@@ -1,4 +1,4 @@
-import { forwardRef } from 'react'
+import { forwardRef, useId } from 'react'
 import { cn } from '../../lib/cn'
 import type { Filter, TaskCounts } from '../../domain/filters'
 import { FilterTabs } from './FilterTabs'
@@ -12,6 +12,15 @@ export interface ToolbarProps {
   counts: TaskCounts
   onFilterChange: (filter: Filter) => void
   onQueryChange: (query: string) => void
+  /** `aria-controls` target for the filter tabs — the list's `role="tabpanel"` id (TechLead note on FELA-16/FELA-15). */
+  listPanelId?: string
+  /**
+   * Stable prefix for each tab's DOM id, so the caller (the composition
+   * root) can predict the selected tab's id for the list's
+   * `aria-labelledby` via `segmentTabId(idPrefix, filter)`. Falls back to
+   * an internal `useId()` when omitted.
+   */
+  idPrefix?: string
 }
 
 /**
@@ -25,10 +34,12 @@ export interface ToolbarProps {
  * future global `/` shortcut focuses this component directly.
  */
 export const Toolbar = forwardRef<HTMLInputElement, ToolbarProps>(function Toolbar(
-  { filter, query, counts, onFilterChange, onQueryChange },
+  { filter, query, counts, onFilterChange, onQueryChange, listPanelId, idPrefix },
   ref,
 ) {
   const { sentinelRef, isStuck } = useStickyBand()
+  const internalIdPrefix = useId()
+  const tabIdPrefix = idPrefix ?? internalIdPrefix
 
   return (
     <>
@@ -40,7 +51,13 @@ export const Toolbar = forwardRef<HTMLInputElement, ToolbarProps>(function Toolb
         )}
       >
         <SearchField ref={ref} value={query} onChange={onQueryChange} />
-        <FilterTabs filter={filter} counts={counts} onFilterChange={onFilterChange} />
+        <FilterTabs
+          filter={filter}
+          counts={counts}
+          onFilterChange={onFilterChange}
+          panelId={listPanelId}
+          idPrefix={tabIdPrefix}
+        />
       </div>
     </>
   )

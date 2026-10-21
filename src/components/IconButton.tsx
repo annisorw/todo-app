@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { BUTTON_VARIANT_CLASSES, type ButtonVariant } from './button-variant'
 import { cn } from '../lib/cn'
@@ -28,18 +29,15 @@ function Spinner() {
 }
 
 /** design-spec 3.6 — 44 px on mobile (default), 40 px from the 640 px breakpoint up. */
-export function IconButton({
-  icon,
-  variant = 'ghost',
-  loading = false,
-  disabled,
-  className,
-  ...rest
-}: IconButtonProps) {
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
+  { icon, variant = 'ghost', loading = false, disabled, className, ...rest },
+  ref,
+) {
   const isDisabled = disabled || loading
 
   return (
     <button
+      ref={ref}
       type="button"
       {...rest}
       disabled={isDisabled}
@@ -55,4 +53,4 @@ export function IconButton({
       </span>
     </button>
   )
-}
+})
