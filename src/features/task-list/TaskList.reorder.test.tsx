@@ -399,19 +399,24 @@ describe('TaskList reordering', () => {
       renderTaskList(makeThree())
       const row = () => document.querySelectorAll('ul[aria-label="Задачи"] .task-row')[1]!
 
-      expect(row().className).toContain('bg-transparent')
+      // The resting row carries its own translucent `surface-1` (FELA-178),
+      // which is exactly what a row in flight must not keep.
+      expect(row().className).toContain('bg-surface-1')
+      expect(row().className).toContain('backdrop-blur-(--blur-surface)')
 
       fireEvent.keyDown(handleFor('Вторая'), { key: ' ' })
 
-      // A translucent card in flight reads dirty, so the fill goes opaque
-      // and the hover tint that would otherwise outrank it is dropped.
+      // A translucent card in flight reads dirty, so the fill goes opaque —
+      // blur and all — and the hover tint that would otherwise outrank it is
+      // dropped.
       expect(row().className).toContain('bg-surface-2-solid')
       expect(row().className).toContain('border-accent')
       expect(row().className).toContain('shadow-drag')
       expect(row().className).not.toContain('hover:bg-surface-2')
+      expect(row().className).not.toContain('backdrop-blur-(--blur-surface)')
 
       fireEvent.keyDown(handleFor('Вторая'), { key: ' ' })
-      expect(row().className).toContain('bg-transparent')
+      expect(row().className).toContain('bg-surface-1')
       expect(row().className).not.toContain('shadow-drag')
     })
 

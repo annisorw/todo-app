@@ -13,6 +13,13 @@ export interface DueDatePickerProps {
   value: string | null
   onChange: (value: string | null) => void
   className?: string
+  /**
+   * Fires on every open/close of the panel. The panel is a `--z-dropdown`
+   * layer rendered in place, so a host that is its own stacking context (the
+   * desktop `TaskRow`, which carries `backdrop-filter`) has to raise itself
+   * while the panel is open — and it cannot see this state otherwise.
+   */
+  onOpenChange?: (open: boolean) => void
   /** Forwarded to the trigger chip — the desktop row quick-path uses this for roving tabindex. */
   tabIndex?: number
   /**
@@ -160,7 +167,14 @@ function DatePanel({ id, value, today, anchorRef, onCommit, onClose, prefersRedu
  * Same `value`/`onChange` contract as `PrioritySelect`: `Composer`,
  * `TaskEditor` and the desktop row quick-path share one implementation.
  */
-export function DueDatePicker({ value, onChange, className, tabIndex, align = 'start' }: DueDatePickerProps) {
+export function DueDatePicker({
+  value,
+  onChange,
+  className,
+  onOpenChange,
+  tabIndex,
+  align = 'start',
+}: DueDatePickerProps) {
   const [open, setOpen] = useState(false)
   const [today] = useState(() => new Date())
   const anchorRef = useRef<HTMLButtonElement>(null)
@@ -168,6 +182,12 @@ export function DueDatePicker({ value, onChange, className, tabIndex, align = 's
   const panelId = useId()
 
   const { status, label } = describeDueDate(value, toDateKey(today))
+
+  /** The one place `open` changes, so the outward report cannot drift from it. */
+  function changeOpen(next: boolean) {
+    setOpen(next)
+    onOpenChange?.(next)
+  }
 
   function handleCommit(nextValue: string | null) {
     onChange(nextValue)
@@ -184,7 +204,7 @@ export function DueDatePicker({ value, onChange, className, tabIndex, align = 's
         expanded={open}
         aria-haspopup="dialog"
         aria-controls={open ? panelId : undefined}
-        onClick={() => setOpen((isOpen) => !isOpen)}
+        onClick={() => changeOpen(!open)}
         className={className}
         tabIndex={tabIndex}
       />
@@ -195,7 +215,7 @@ export function DueDatePicker({ value, onChange, className, tabIndex, align = 's
           today={today}
           anchorRef={anchorRef}
           onCommit={handleCommit}
-          onClose={() => setOpen(false)}
+          onClose={() => changeOpen(false)}
           prefersReducedMotion={prefersReducedMotion}
           align={align}
         />
