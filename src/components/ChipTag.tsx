@@ -1,5 +1,7 @@
 import { forwardRef } from 'react'
 import type { ComponentPropsWithoutRef, CSSProperties, ReactNode } from 'react'
+import { CHIP_INTERACTIVE_TOUCH_TARGET_CLASSES } from './chip'
+import { cn } from '../lib/cn'
 
 export interface ChipTagProps extends Omit<ComponentPropsWithoutRef<'button'>, 'className' | 'style' | 'children'> {
   isInteractive: boolean
@@ -17,6 +19,11 @@ export interface ChipTagProps extends Omit<ComponentPropsWithoutRef<'button'>, '
  * `aria-labelledby` at a static mobile chip's id to compose its accessible
  * name (acceptance criterion 25). This is the live requirement the FELA-55
  * warning's own docstring left for whoever hit it first.
+ *
+ * The interactive branch is also the one place that knows a chip is a tap
+ * target, so the mobile 44 px hit area lives here rather than in each caller —
+ * `PriorityChip` and `DueDateChip` get it by being interactive, and the static
+ * chips `TaskRow` renders on mobile stay untouched (design-spec 3.12).
  */
 export const ChipTag = forwardRef<HTMLButtonElement, ChipTagProps>(function ChipTag(
   { isInteractive, expanded, className, style, children, id, ...rest },
@@ -24,7 +31,15 @@ export const ChipTag = forwardRef<HTMLButtonElement, ChipTagProps>(function Chip
 ) {
   if (isInteractive) {
     return (
-      <button type="button" ref={ref} id={id} aria-expanded={expanded} style={style} className={className} {...rest}>
+      <button
+        type="button"
+        ref={ref}
+        id={id}
+        aria-expanded={expanded}
+        style={style}
+        className={cn(className, CHIP_INTERACTIVE_TOUCH_TARGET_CLASSES)}
+        {...rest}
+      >
         {children}
       </button>
     )

@@ -1,9 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { createRef } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ThemeProvider } from '../state/ThemeProvider'
 import { stubMatchMedia } from '../test/matchMedia'
 import { AppHeader } from './AppHeader'
+import type { ShortcutsPanelHandle } from './AppHeader'
 
 function renderHeader() {
   return render(
@@ -65,19 +67,42 @@ describe('AppHeader', () => {
     expect(screen.getByRole('button', { name: 'Горячие клавиши' })).toBeInTheDocument()
   })
 
-  it('opens as a plain disclosure, not a dialog', async () => {
+  it('opens ShortcutsSheet as a real modal, not a disclosure', async () => {
     const user = userEvent.setup()
     renderHeader()
 
     const trigger = screen.getByRole('button', { name: 'Горячие клавиши' })
-    expect(trigger).toHaveAttribute('aria-expanded', 'false')
-    expect(trigger).toHaveAttribute('aria-controls')
+    expect(trigger).not.toHaveAttribute('aria-expanded')
+    expect(trigger).not.toHaveAttribute('aria-controls')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
     await user.click(trigger)
 
-    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(dialog).toHaveAccessibleName('Горячие клавиши')
+
+    await user.keyboard('{Escape}')
+
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByText('Шпаргалка появится позже.')).toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+  })
+
+  it('exposes openShortcuts on the ref, the `?` shortcut (FELA-20) second trigger for the same panel', () => {
+    const ref = createRef<ShortcutsPanelHandle>()
+    render(
+      <ThemeProvider>
+        <AppHeader ref={ref} />
+      </ThemeProvider>,
+    )
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    act(() => {
+      ref.current?.openShortcuts()
+    })
+
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Горячие клавиши')
   })
 })
 
