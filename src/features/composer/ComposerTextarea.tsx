@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import type { RefObject } from 'react'
 import { MAX_TITLE_LENGTH } from '../../domain/limits'
 import { cn } from '../../lib/cn'
 import type { ComposerFormController } from './useComposerForm'
@@ -8,7 +7,6 @@ export interface ComposerTextareaProps {
   form: ComposerFormController
   errorId: string
   autoFocus?: boolean
-  textareaRef?: RefObject<HTMLTextAreaElement | null>
   className?: string
 }
 
@@ -26,20 +24,19 @@ export interface ComposerTextareaProps {
  * See `focusRing.node.test.ts` for the allowlist entry this suppression has
  * to keep satisfying.
  */
-export function ComposerTextarea({ form, errorId, autoFocus, textareaRef, className }: ComposerTextareaProps) {
-  const ownRef = useRef<HTMLTextAreaElement>(null)
-  const resolvedRef = textareaRef ?? ownRef
+export function ComposerTextarea({ form, errorId, autoFocus, className }: ComposerTextareaProps) {
+  const ref = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    const node = resolvedRef.current
+    const node = ref.current
     if (node === null) return
     node.style.height = 'auto'
     node.style.height = `${String(node.scrollHeight)}px`
-  }, [form.title, resolvedRef])
+  }, [form.title])
 
   return (
     <textarea
-      ref={resolvedRef}
+      ref={ref}
       autoFocus={autoFocus}
       rows={1}
       value={form.title}

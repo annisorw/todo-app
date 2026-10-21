@@ -1,7 +1,9 @@
+import { cn } from '../../lib/cn'
 import type { ComposerFormController } from './useComposerForm'
 
 export interface ComposerSubmitProps {
   form: ComposerFormController
+  className?: string
 }
 
 function PlusIcon() {
@@ -13,7 +15,7 @@ function PlusIcon() {
 }
 
 /** The gradient "+" submit button, shared by the desktop panel and the mobile sheet. */
-export function ComposerSubmit({ form }: ComposerSubmitProps) {
+export function ComposerSubmit({ form, className }: ComposerSubmitProps) {
   const canSubmit = form.error !== 'tooLong' && form.error !== 'atLimit'
 
   return (
@@ -23,7 +25,10 @@ export function ComposerSubmit({ form }: ComposerSubmitProps) {
       disabled={!canSubmit}
       aria-label="Добавить задачу в список"
       style={{ backgroundImage: 'var(--gradient-accent)' }}
-      className="flex size-10 shrink-0 items-center justify-center rounded-full text-accent-contrast transition-opacity duration-(--duration-fast) ease-standard disabled:cursor-not-allowed disabled:opacity-45"
+      className={cn(
+        'flex size-10 shrink-0 items-center justify-center rounded-full text-accent-contrast transition-opacity duration-(--duration-fast) ease-standard disabled:cursor-not-allowed disabled:opacity-45',
+        className,
+      )}
     >
       <PlusIcon />
     </button>

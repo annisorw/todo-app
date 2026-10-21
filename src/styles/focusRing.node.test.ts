@@ -126,8 +126,10 @@ const SUPPRESSIONS: readonly Suppression[] = sourceFiles(SRC).flatMap((path) => 
     )
 })
 
-/** `@`-rules enclosing `index`, outermost first. Comments are blanked (not
- *  removed) so a `@` in prose cannot fake a layer and indices stay aligned. */
+/** `@`-rules enclosing `index`, outermost first, as `@name arg` (e.g.
+ *  `@layer base`) so a bare `@layer` match can't pass for the right one.
+ *  Comments are blanked (not removed) so a `@` in prose cannot fake a layer
+ *  and indices stay aligned. */
 function enclosingAtRules(css: string, index: number): string[] {
   const text = css.replace(/\/\*[\s\S]*?\*\//g, (match) => ' '.repeat(match.length))
   const stack: (string | null)[] = []
@@ -135,8 +137,8 @@ function enclosingAtRules(css: string, index: number): string[] {
   for (let i = 0; i < index; i += 1) {
     const char = text[i]
     if (char === '{') {
-      const name = text.slice(since, i).match(/@([\w-]+)[^{};]*$/)
-      stack.push(name ? `@${name[1]}` : null)
+      const prelude = text.slice(since, i).match(/@([\w-]+)([^{};]*)$/)
+      stack.push(prelude ? `@${prelude[1]} ${(prelude[2] ?? '').trim()}`.trim() : null)
       since = i + 1
     } else if (char === '}' || char === ';') {
       if (char === '}') stack.pop()
@@ -161,8 +163,8 @@ describe('focus ring', () => {
     expect(ring, 'no `:focus-visible` rule in base.css').toBeGreaterThan(-1)
     expect(
       enclosingAtRules(baseCss, ring),
-      'An unlayered rule beats every layered utility regardless of specificity, so moving the ring out of `@layer base` makes every ALLOWED_SUPPRESSIONS entry inert and brings the double focus indicator back — silently, because the allowlist would still look consistent.',
-    ).toContain('@layer')
+      'An unlayered rule beats every layered utility regardless of specificity, so moving the ring out of `@layer base` (into `@layer utilities`, or out of any layer) makes every ALLOWED_SUPPRESSIONS entry inert and brings the double focus indicator back — silently, because the allowlist would still look consistent.',
+    ).toContain('@layer base')
   })
 
   it('is never suppressed outside the allowlist', () => {

@@ -15,10 +15,12 @@ import { useComposerForm } from './useComposerForm'
  * section 2). Adding a task goes through the store's `task/add` action
  * only; this component has no `localStorage` code of its own.
  *
- * Field, chips and submit button sit in one row here (DOM order is also the
- * visual order: field -> priority -> due date -> "+"); `ComposerSheet` lays
- * the same pieces out in two rows instead, which is why they are separate
- * composable parts rather than one component switching on a layout flag.
+ * Field, chips and submit button sit in one row here. Spec 3.7 puts the "+"
+ * on the left, so it carries `order-first` to move visually without moving
+ * in the DOM — tab order stays field -> priority -> due date -> "+" (section
+ * 7). `ComposerSheet` lays the same pieces out in two rows instead, which is
+ * why they are separate composable parts rather than one component
+ * switching on a layout flag.
  */
 export function Composer() {
   const { addTask, isAtLimit } = useTaskStore()
@@ -33,14 +35,14 @@ export function Composer() {
         className={cn(
           'hidden rounded-(--radius-xl) border bg-surface-1 p-(--space-5) transition-shadow duration-(--duration-fast) ease-standard sm:block',
           form.error ? 'border-danger' : 'border-transparent',
-          form.isFocused && form.error === null ? 'shadow-glow-accent' : 'shadow-sm',
+          form.isFocused ? 'shadow-glow-accent' : 'shadow-sm',
         )}
       >
         <div className="flex flex-col gap-(--space-2)">
           <div className="flex items-center gap-(--space-3)">
             <ComposerTextarea form={form} errorId={errorId} className="min-w-0 flex-1" />
             <ComposerChips form={form} />
-            <ComposerSubmit form={form} />
+            <ComposerSubmit form={form} className="order-first" />
           </div>
 
           <ComposerFieldMeta form={form} errorId={errorId} />

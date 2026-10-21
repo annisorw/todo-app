@@ -73,11 +73,8 @@ export function ComposerSheet({ form, triggerRef, onClose }: ComposerSheetProps)
           <div
             className={cn(
               'rounded-(--radius-md) border bg-surface-1 px-(--space-3) py-(--space-3) transition-colors duration-(--duration-fast) ease-standard',
-              form.error
-                ? 'border-danger'
-                : form.isFocused
-                  ? 'border-accent-text shadow-glow-accent'
-                  : 'border-surface-border',
+              form.error ? 'border-danger' : form.isFocused ? 'border-accent-text' : 'border-surface-border',
+              form.isFocused && 'shadow-glow-accent',
             )}
           >
             <ComposerTextarea form={form} errorId={errorId} autoFocus className="w-full" />
@@ -85,7 +82,7 @@ export function ComposerSheet({ form, triggerRef, onClose }: ComposerSheetProps)
 
           <ComposerFieldMeta form={form} errorId={errorId} />
 
-          <div className="flex items-center gap-(--space-3)">
+          <div className="flex items-center justify-between gap-(--space-3)">
             <ComposerChips form={form} />
             <ComposerSubmit form={form} />
           </div>
