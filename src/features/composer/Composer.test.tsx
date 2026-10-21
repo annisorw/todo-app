@@ -176,7 +176,7 @@ describe('Composer', () => {
     expect(panel).not.toHaveClass('shadow-glow-accent')
   })
 
-  it('on desktop, an error while still focused shows only the error border — no accent glow (FELA-106, FELA-68 AC4)', async () => {
+  it('on desktop, an error while still focused keeps the border error-coloured and switches the glow to danger (FELA-106, FELA-196 §3.7)', async () => {
     const user = userEvent.setup()
     const { container } = renderComposer()
 
@@ -189,9 +189,32 @@ describe('Composer', () => {
 
     const panel = container.querySelector('[class*="radius-xl"]')
     expect(panel).not.toBeNull()
-    // Error outranks "is it focused" (FELA-68 AC4): the border alone carries
-    // the error, the glow must not also be lit at the same time.
+    // The border carries the error, same as before. The glow (spec v1.14):
+    // it stays lit while focused, it only changes colour — exactly one
+    // indicator pair, never a mix of the accent glow with the error border.
     expect(panel).toHaveClass('border-danger')
+    expect(panel).toHaveClass('shadow-glow-danger')
+    expect(panel).not.toHaveClass('shadow-glow-accent')
+    expect(panel).not.toHaveClass('shadow-sm')
+  })
+
+  it('on desktop, an error without focus drops the glow entirely, same as the no-error case', async () => {
+    const user = userEvent.setup()
+    const { container } = renderComposer()
+
+    const field = screen.getByRole('textbox', { name: 'Текст новой задачи' })
+    await user.click(field)
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('alert')).toHaveTextContent('Введите текст задачи.')
+
+    await user.tab()
+    expect(field).not.toHaveFocus()
+
+    const panel = container.querySelector('[class*="radius-xl"]')
+    expect(panel).not.toBeNull()
+    expect(panel).toHaveClass('border-danger')
+    expect(panel).toHaveClass('shadow-sm')
+    expect(panel).not.toHaveClass('shadow-glow-danger')
     expect(panel).not.toHaveClass('shadow-glow-accent')
   })
 
@@ -245,7 +268,7 @@ describe('Composer', () => {
     expect(fieldBox).not.toHaveClass('shadow-glow-accent')
   })
 
-  it('in the sheet, an error while still focused shows only the error border — no accent glow (FELA-106, FELA-68 AC4/AC8)', async () => {
+  it('in the sheet, an error while still focused keeps the border error-coloured and switches the glow to danger (FELA-106, FELA-196 §3.7)', async () => {
     const user = userEvent.setup()
     renderComposer()
 
@@ -261,9 +284,30 @@ describe('Composer', () => {
 
     const fieldBox = field.closest('[class*="radius-md"]')
     expect(fieldBox).not.toBeNull()
-    // Exactly one indicator at a time (FELA-68 AC8): the border carries the
-    // error, the glow must not also be lit while the field is still focused.
     expect(fieldBox).toHaveClass('border-danger')
+    expect(fieldBox).toHaveClass('shadow-glow-danger')
+    expect(fieldBox).not.toHaveClass('shadow-glow-accent')
+  })
+
+  it('in the sheet, an error without focus drops the glow entirely', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    await user.click(screen.getByRole('button', { name: 'Добавить задачу' }))
+    const dialog = screen.getByRole('dialog', { name: 'Добавить задачу' })
+    const field = within(dialog).getByRole('textbox', { name: 'Текст новой задачи' })
+    expect(field).toHaveFocus()
+
+    await user.keyboard('{Enter}')
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Введите текст задачи.')
+
+    await user.tab()
+    expect(field).not.toHaveFocus()
+
+    const fieldBox = field.closest('[class*="radius-md"]')
+    expect(fieldBox).not.toBeNull()
+    expect(fieldBox).toHaveClass('border-danger')
+    expect(fieldBox).not.toHaveClass('shadow-glow-danger')
     expect(fieldBox).not.toHaveClass('shadow-glow-accent')
   })
 })

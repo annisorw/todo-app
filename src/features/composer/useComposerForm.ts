@@ -28,15 +28,16 @@ export interface ComposerFormController {
   errorMessage: string | null
   isFocused: boolean
   /**
-   * FELA-106: the accent glow and the error border are two independent
-   * tokens on different CSS properties (box-shadow vs. border-color), so
-   * without a shared condition each call site risks re-deriving it and
-   * drifting out of sync — which is exactly how the bug happened (the
-   * border ternary accounted for `error`, the shadow one didn't). Error
-   * outranks focus (FELA-68 AC4): once there's an error, the glow goes
-   * dark even while the field is still focused.
+   * FELA-106 / FELA-196 (spec v1.14 §3.7): the glow and the error border are
+   * two independent tokens on different CSS properties (box-shadow vs.
+   * border-color), so without a shared condition each call site risks
+   * re-deriving it and drifting out of sync — which is exactly how the
+   * FELA-106 bug happened (the border ternary accounted for `error`, the
+   * shadow one didn't). The border still outranks focus for *validity*, but
+   * the glow itself never turns off while focused — it only changes colour:
+   * `null` when not focused, otherwise which glow token is lit.
    */
-  showFocusGlow: boolean
+  focusGlow: 'accent' | 'danger' | null
   showCounter: boolean
   setTitle: (value: string) => void
   setPriority: (value: Priority) => void
@@ -119,7 +120,7 @@ export function useComposerForm({ addTask, isAtLimit, onTaskAdded }: UseComposer
     error,
     errorMessage: error ? ERROR_MESSAGE[error] : null,
     isFocused,
-    showFocusGlow: isFocused && error === null,
+    focusGlow: isFocused ? (error === null ? 'accent' : 'danger') : null,
     showCounter: title.length >= TITLE_COUNTER_THRESHOLD,
     setTitle,
     setPriority,

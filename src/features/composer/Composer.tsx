@@ -86,9 +86,13 @@ export function Composer({ ref, filter }: ComposerProps) {
     <>
       <div
         className={cn(
-          'composer hidden rounded-(--radius-xl) border bg-surface-1 p-(--space-5) transition-shadow duration-(--duration-fast) ease-standard sm:block',
+          'composer hidden rounded-(--radius-xl) border bg-surface-1 p-(--space-5) transition duration-(--duration-fast) ease-standard sm:block',
           form.error ? 'border-danger' : 'border-transparent',
-          form.showFocusGlow ? 'shadow-glow-accent' : 'shadow-sm',
+          form.focusGlow === 'accent'
+            ? 'shadow-glow-accent'
+            : form.focusGlow === 'danger'
+              ? 'shadow-glow-danger'
+              : 'shadow-sm',
         )}
       >
         <div className="flex flex-col gap-(--space-2)">

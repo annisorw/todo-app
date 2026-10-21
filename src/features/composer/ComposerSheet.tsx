@@ -167,9 +167,13 @@ export function ComposerSheet({ form, triggerRef, onClose }: ComposerSheetProps)
         <div className="flex flex-col gap-(--space-2)">
           <div
             className={cn(
-              'flex items-start gap-(--space-2) rounded-(--radius-md) border bg-surface-1 px-(--space-3) py-(--space-3) transition-colors duration-(--duration-fast) ease-standard',
+              'flex items-start gap-(--space-2) rounded-(--radius-md) border bg-surface-1 px-(--space-3) py-(--space-3) transition duration-(--duration-fast) ease-standard',
               form.error ? 'border-danger' : form.isFocused ? 'border-accent-text' : 'border-surface-border',
-              form.showFocusGlow ? 'shadow-glow-accent' : false,
+              form.focusGlow === 'accent'
+                ? 'shadow-glow-accent'
+                : form.focusGlow === 'danger'
+                  ? 'shadow-glow-danger'
+                  : false,
             )}
           >
             <ComposerTextarea form={textareaForm} errorId={errorId} autoFocus className="min-w-0 flex-1" />
