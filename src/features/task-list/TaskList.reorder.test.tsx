@@ -165,6 +165,29 @@ describe('TaskList reordering', () => {
       expect(renderedOrder()).toEqual(['Первая', 'Третья', 'Вторая'])
     })
 
+    it('works with focus on the drag handle, not only on the checkbox', () => {
+      renderTaskList(makeThree())
+
+      // The gesture has to reach the row from anywhere inside it. Here the
+      // grab mode sees the key first and leaves it alone — nothing is held.
+      fireEvent.keyDown(handleFor('Первая'), { key: 'ArrowDown', ctrlKey: true })
+
+      expect(renderedOrder()).toEqual(['Вторая', 'Первая', 'Третья'])
+      expect(announcement()).toBe('Задача «Первая» перемещена на позицию 2 из 3')
+    })
+
+    it('is the grab mode step, not a second move, while a row is held', () => {
+      renderTaskList(makeThree())
+
+      fireEvent.keyDown(handleFor('Первая'), { key: ' ' })
+      fireEvent.keyDown(handleFor('Первая'), { key: 'ArrowDown', ctrlKey: true })
+
+      // One step, announced in the grab mode's own wording — the held row
+      // must not be moved twice by one key press.
+      expect(renderedOrder()).toEqual(['Вторая', 'Первая', 'Третья'])
+      expect(announcement()).toBe('Позиция 2 из 3')
+    })
+
     it('leaves a plain ↑/↓ to the roving focus instead of moving the row', () => {
       renderTaskList(makeThree())
 

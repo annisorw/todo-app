@@ -1,5 +1,6 @@
 import { AnimatePresence, Reorder } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
+import type { KeyboardEvent } from 'react'
 import { EmptyState } from '../../components/EmptyState'
 import { toDateKey } from '../../domain/dueDate'
 import type { Filter, TaskView } from '../../domain/filters'
@@ -199,43 +200,18 @@ export function TaskList({
     })
   }
 
-  /**
-   * `Ctrl/Cmd+↑`/`↓` — design-spec 6.4's «альтернатива без режима». The step
-   * is one *visible* neighbour, so a filtered or searched list moves the row
-   * past what the user can actually see; the store index that `task/move`
-   * wants is then looked up from that neighbour. No wrap-around: a move that
-   * silently teleported the first row to the bottom is a different gesture
-   * from "one step".
-   */
-  function moveRow(taskId: string, delta: -1 | 1) {
-    const visibleIndex = displayActive.findIndex((task) => task.id === taskId)
-    // `findIndex` misses with `-1` and `displayActive[-1]` is `undefined`, so
-    // one guard covers both «строки нет в этой группе» and the lookup — and
-    // the row found here is the one announced below, not a second search.
-    const moved = displayActive[visibleIndex]
-    if (moved === undefined) return
-
-    const neighbour = displayActive[visibleIndex + delta]
-    if (neighbour === undefined) return
-
-    const from = tasks.findIndex((task) => task.id === taskId)
-    const to = tasks.findIndex((task) => task.id === neighbour.id)
-    if (from === -1 || to === -1) return
-
-    moveTask(from, to)
-    announce(
-      `Задача «${moved.title}» перемещена на позицию ${String(visibleIndex + delta + 1)} из ${String(displayActive.length)}`,
-    )
-  }
-
   // One declaration for both row groups (design-spec 6.3, row-scoped half).
+  // The key belongs to this hook — FELA-20 owns all of 6.3 — while the order
+  // it writes belongs to `useTaskReorder.moveRow`: the one writer the pointer
+  // drag and both keyboard paths go through, so «на какую позицию» has a
+  // single answer (review R1).
   const handleRowKeyDown = useRowShortcuts({
     openEditor: setEditingId,
     removeTask: (taskId) => {
       const task = tasks.find((candidate) => candidate.id === taskId)
       if (task !== undefined) handleRemove(task)
     },
-    moveTask: moveRow,
+    moveTask: reorder.moveRow,
   })
 
   return (
@@ -288,7 +264,14 @@ export function TaskList({
                   value: task.id,
                   isMovable: !isDone(task),
                   isGrabbed: reorder.grabbedId === task.id,
-                  onHandleKeyDown: (event) => reorder.handleHandleKeyDown(event, task.id),
+                  onHandleKeyDown: (event) => {
+                    reorder.handleHandleKeyDown(event, task.id)
+                    // Same two-step order the bubble to `useRowShortcuts`
+                    // will have after FELA-20: the grab mode gets the key
+                    // first and marks it handled; this only sees what it
+                    // left alone.
+                    handleCtrlArrow(event, task)
+                  },
                   onHandleBlur: () => reorder.handleHandleBlur(task.id),
                 }}
               />

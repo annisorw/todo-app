@@ -10,10 +10,16 @@ import { announce } from '../../lib/announce'
  *
  * The mouse path is Framer Motion's `Reorder.Group`: it hands over a whole
  * reordered array, which `diffMove` reads back as one from→to pair. The
- * keyboard path is this hook's own: `Space` grabs, `↑`/`↓` step, `Space`
- * drops, `Esc` puts the row back, and `Ctrl/Cmd+↑/↓` steps a row without
- * entering the mode at all. Every keyboard step goes through `LiveRegion`
- * (acceptance criteria 22–23).
+ * keyboard path is the grab mode on the `DragHandle`: `Space` grabs, `↑`/`↓`
+ * step, `Space` drops, `Esc` puts the row back. Every keyboard step goes
+ * through `LiveRegion` (acceptance criteria 22–23).
+ *
+ * The third gesture, `Ctrl/Cmd+↑/↓` without the mode, is *not* bound here:
+ * every key in design-spec 6.3 is declared once, in
+ * `features/shortcuts/useRowShortcuts`, which delivers it on the row element
+ * so it works from the handle, the chips and the row's buttons alike. This
+ * hook only owns the writer it calls — `moveRow` — so that gesture still
+ * reaches `task/move` through this one path and nothing else.
  */
 
 const ARROW_DELTA: Record<string, number | undefined> = { ArrowUp: -1, ArrowDown: 1 }
@@ -36,12 +42,18 @@ export interface TaskReorder {
   grabbedId: string | null
   /** `Reorder.Group`'s `onReorder` — the pointer path. */
   handleReorder: (nextIds: string[]) => void
-  /** `DragHandle`'s `onKeyDown`: the grab mode, plus the `Ctrl/Cmd` step. */
+  /** `DragHandle`'s `onKeyDown` — the grab mode (`Space`, `↑`/`↓`, `Esc`). */
   handleHandleKeyDown: (event: KeyboardEvent, id: string) => void
   /** `DragHandle`'s `onBlur` — drops the lifted look when focus leaves. */
   handleHandleBlur: (id: string) => void
-  /** `Ctrl/Cmd+↑/↓` on a focused row. Returns `true` when it consumed the event. */
-  handleRowKeyDown: (event: KeyboardEvent, id: string) => boolean
+  /**
+   * Steps a row one *visible* slot and announces its new position — the
+   * writer behind `useRowShortcuts`'s `Ctrl/Cmd+↑/↓`. Silent at the ends of
+   * the list and for a row the list doesn't show: no wrap-around, because a
+   * move that teleported the first row to the bottom is a different gesture
+   * from "one step".
+   */
+  moveRow: (id: string, delta: -1 | 1) => void
 }
 
 /**
@@ -167,26 +179,17 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
     [ids, applyMove],
   )
 
-  const handleRowKeyDown = useCallback(
-    (event: KeyboardEvent, id: string): boolean => {
-      if (!event.ctrlKey && !event.metaKey) return false
-      const delta = ARROW_DELTA[event.key]
-      if (delta === undefined) return false
-
+  const moveRow = useCallback(
+    (id: string, delta: -1 | 1) => {
       const index = ids.indexOf(id)
-      if (index === -1) return false
+      if (index === -1) return
 
-      // Consumed even at the ends of the list: letting `Ctrl+↑` on the first
-      // row fall through to the roving `↑` would wrap the *focus* around
-      // instead of doing nothing, which reads as the row having moved.
-      event.preventDefault()
       const to = index + delta
-      if (to < 0 || to >= ids.length) return true
+      if (to < 0 || to >= ids.length) return
 
       if (applyMove(index, to)) {
         announce(`Задача «${titleOf(id)}» перемещена на позицию ${to + 1} из ${ids.length}`)
       }
-      return true
     },
     [ids, applyMove, titleOf],
   )
@@ -215,10 +218,10 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
         return
       }
 
-      if (held !== id) {
-        handleRowKeyDown(event, id)
-        return
-      }
+      // Not the held row: every other key on the handle belongs to the row's
+      // own handler (`useRowShortcuts` — `E`, `Delete`, `Ctrl/Cmd+↑/↓`).
+      // Nothing is prevented here, so the event bubbles on to it.
+      if (held !== id) return
 
       if (event.key === 'Escape') {
         event.preventDefault()
@@ -237,7 +240,7 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
       if (to < 0 || to >= ids.length) return
       if (applyMove(index, to)) announce(`Позиция ${to + 1} из ${ids.length}`)
     },
-    [ids, held, applyMove, titleOf, handleRowKeyDown],
+    [ids, held, applyMove, titleOf],
   )
 
   const handleHandleBlur = useCallback((id: string) => {
@@ -252,6 +255,6 @@ export function useTaskReorder({ tasks, ids, moveTask }: UseTaskReorderOptions):
     handleReorder,
     handleHandleKeyDown,
     handleHandleBlur,
-    handleRowKeyDown,
+    moveRow,
   }
 }
