@@ -65,8 +65,8 @@ function renderRow(overrides: Partial<ComponentProps<typeof TaskRow>> = {}) {
 // contests the row's lift. `Reorder.Item` throws outside a `Reorder.Group`
 // ("reorder-item-child" invariant), so the wrapper below is required, not
 // decorative.
-function renderReorderableRow(task: Task, overrides: Partial<ComponentProps<typeof TaskRow>> = {}) {
-  return render(
+function reorderableRow(task: Task, overrides: Partial<ComponentProps<typeof TaskRow>> = {}) {
+  return (
     <Reorder.Group as="ul" axis="y" values={[task.id]} onReorder={() => {}}>
       <TaskRow
         task={task}
@@ -99,11 +99,20 @@ function renderReorderableRow(task: Task, overrides: Partial<ComponentProps<type
         }}
         {...overrides}
       />
-    </Reorder.Group>,
+    </Reorder.Group>
   )
 }
 
+function renderReorderableRow(task: Task, overrides: Partial<ComponentProps<typeof TaskRow>> = {}) {
+  return render(reorderableRow(task, overrides))
+}
+
 const rowOf = (container: HTMLElement) => container.querySelector('.task-row') as HTMLElement
+
+// Asserted literally rather than folded into a prefix check: the unmarked
+// utility is a substring of its own important variant, so a substring match
+// would pass against the pre-fix class list too (FELA-213/FELA-228).
+const LIFT = 'z-(--z-content)!'
 
 describe('TaskRow surface (design-spec 3.11)', () => {
   afterEach(() => {
@@ -147,8 +156,6 @@ describe('TaskRow stacking while a popup inside it is open (design-spec 2.9, cri
   // trailing `!` is the one token that actually discriminates fixed from
   // broken, which is why it is asserted literally rather than folded into
   // `LIFT` as a prefix.
-  const LIFT = 'z-(--z-content)!'
-
   it('writes a competing inline z-index on the active-list row, which is why the lift needs !important', () => {
     stubMatchMedia(false)
     const task = makeTask({ id: 't1', title: 'Купить молоко' })
@@ -218,5 +225,69 @@ describe('TaskRow stacking while a popup inside it is open (design-spec 2.9, cri
     fireEvent.click(getByRole('button', { name: 'Срок' }))
     fireEvent.click(getByRole('button', { name: 'Приоритет' }))
     expect(item.className).toContain(LIFT)
+  })
+})
+
+// FELA-228: exactly the FELA-213 mechanism, on the row's own drag lift
+// instead of its popup lift. `Reorder.Item` writes an inline `z-index: 1`
+// while a drag is live (`isGrabbed`/`isDragging`), which an unmarked
+// `z-(--z-drag)` utility can never beat — the row flew under the sticky
+// toolbar mid-drag. `z-(--z-drag)!` is asserted literally (not as a prefix
+// of a `DRAG_LIFT` constant check) for the same reason `LIFT` above is: the
+// unmarked class is a substring of the important variant.
+describe('TaskRow stacking while the row is being dragged (design-spec 2.9, criterion 30)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const DRAG_LIFT = 'z-(--z-drag)!'
+
+  it('raises the row above the sticky toolbar while grabbed, and drops it once released', () => {
+    stubMatchMedia(false)
+    const task = makeTask({ id: 't1', title: 'Купить молоко' })
+    const { container, rerender } = renderReorderableRow(task, {
+      reorder: {
+        value: task.id,
+        isMovable: true,
+        isGrabbed: true,
+        onHandleKeyDown: () => {},
+        onHandleBlur: () => {},
+        onDragStart: () => {},
+        onDragEnd: () => {},
+        onGrab: () => {},
+        onStep: () => {},
+        onDrop: () => {},
+        onCancel: () => {},
+      },
+    })
+    const item = container.querySelector('li') as HTMLElement
+    expect(item.className).toContain(DRAG_LIFT)
+
+    rerender(reorderableRow(task))
+    expect(item.className).not.toContain(DRAG_LIFT)
+  })
+
+  it('keeps --z-drag over --z-content when the row is dragged while its own popup is open', () => {
+    stubMatchMedia(false)
+    const task = makeTask({ id: 't1', title: 'Купить молоко' })
+    const { container, getByLabelText } = renderReorderableRow(task, {
+      reorder: {
+        value: task.id,
+        isMovable: true,
+        isGrabbed: true,
+        onHandleKeyDown: () => {},
+        onHandleBlur: () => {},
+        onDragStart: () => {},
+        onDragEnd: () => {},
+        onGrab: () => {},
+        onStep: () => {},
+        onDrop: () => {},
+        onCancel: () => {},
+      },
+    })
+    const item = container.querySelector('li') as HTMLElement
+    fireEvent.click(getByLabelText('Действия с задачей: Купить молоко'))
+    expect(item.className).toContain(LIFT)
+    expect(item.className).toContain(DRAG_LIFT)
   })
 })
