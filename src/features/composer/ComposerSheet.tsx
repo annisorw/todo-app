@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { useId, useLayoutEffect, useRef, useState } from 'react'
-import type { RefObject } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react'
 import { IconButton } from '../../components/IconButton'
 import { announce } from '../../lib/announce'
 import { cn } from '../../lib/cn'
@@ -115,6 +115,33 @@ export function ComposerSheet({ form, triggerRef, onClose }: ComposerSheetProps)
     },
   }
 
+  // Trap Tab inside the sheet: the page behind it stays mounted under this
+  // `aria-modal` dialog, so without this the native tab order would walk
+  // right through to it — same pattern as `TaskEditorSheet`. The chip
+  // popovers render inline inside `panelRef` (not portaled), and the
+  // focusable set changes while one is open, so this re-queries live on
+  // every Tab instead of caching first/last once.
+  function handlePanelKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Tab') return
+
+    const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    )
+    if (!focusable || focusable.length === 0) return
+
+    const first = focusable.item(0)
+    const last = focusable.item(focusable.length - 1)
+    if (first === null || last === null) return
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-(--z-modal) flex flex-col justify-end">
       <motion.div
@@ -128,6 +155,7 @@ export function ComposerSheet({ form, triggerRef, onClose }: ComposerSheetProps)
 
       <motion.div
         ref={panelRef}
+        onKeyDown={handlePanelKeyDown}
         role="dialog"
         aria-modal="true"
         aria-label="Добавить задачу"

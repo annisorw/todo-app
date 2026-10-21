@@ -351,6 +351,45 @@ describe('Composer sheet + chip popover — two stacked Esc layers', () => {
     expect(screen.getByRole('dialog', { name: 'Добавить задачу' })).toBeInTheDocument()
     expect(field).toHaveFocus()
   })
+
+  it('Tab forward from "+" wraps to the textarea, and Shift+Tab back from the textarea wraps to "+"', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    const dialog = await openSheet(user)
+    const field = within(dialog).getByRole('textbox', { name: 'Текст новой задачи' })
+    const submit = within(dialog).getByRole('button', { name: 'Добавить задачу в список' })
+
+    submit.focus()
+    await user.tab()
+    expect(field).toHaveFocus()
+
+    field.focus()
+    await user.tab({ shift: true })
+    expect(submit).toHaveFocus()
+  })
+
+  it('Tab stays inside the sheet while a chip popover is open, cycling through its menu items', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    const dialog = await openSheet(user)
+    const chip = within(dialog).getByRole('button', { name: 'Приоритет' })
+    await user.click(chip)
+
+    const menu = within(dialog).getByRole('menu')
+    const menuItems = within(menu).getAllByRole('menuitem')
+    const last = menuItems[menuItems.length - 1]!
+
+    last.focus()
+    await user.tab()
+
+    // The popover renders inline inside the dialog, so the trap's live
+    // re-query picks its items up too — Tab never escapes to the page
+    // behind the sheet while the menu is open.
+    expect(within(dialog).getByRole('menu')).toBeInTheDocument()
+    expect(dialog.contains(document.activeElement)).toBe(true)
+  })
 })
 
 /**
