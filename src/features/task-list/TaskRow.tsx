@@ -116,10 +116,12 @@ function ExpandableTitle({ task, query, titleId }: { task: Task; query: string; 
 /**
  * design-spec 3.11 / 3.12 / 3.13 — the task row: `DragHandle` slot (drag
  * itself is [FELA-17](/FELA/issues/FELA-17)) · `Checkbox` · title + meta
- * chips · `edit`/`more` actions. Mobile swaps hover-revealed actions for a
- * long-press or swipe-left, both opening the same accessible `Menu` — the
- * "button alternative" the spec requires for the swipe gesture is simply
- * the same menu either path opens, not a second, bespoke affordance.
+ * chips · `edit`/`more` actions. Mobile swaps the hover-revealed desktop
+ * actions for a long-press or swipe-left — plus a persistent `more`
+ * `IconButton` (FELA-120): the gesture is a shortcut, not the only way in,
+ * so Menu stays reachable by mouse, touch, and keyboard without it. All
+ * three paths open the same `Menu`; Esc returns focus to whichever one
+ * actually opened it (`menuAnchorKind`), not always the checkbox.
  *
  * The roving-focus anchor (and the accessible-name target for criterion 25)
  * is the `Checkbox`'s native input, not a wrapping row element — only a real
@@ -145,6 +147,10 @@ export function TaskRow({
   const isDesktop = useMediaQuery('(min-width: 640px)')
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const [menuOpen, setMenuOpen] = useState(false)
+  // Esc (criterion in FELA-120) must return focus to whichever element actually opened
+  // the menu: the gesture has no focusable origin of its own, so it keeps using the
+  // row's roving-focus anchor (the checkbox); the mobile `more` button is its own anchor.
+  const [menuAnchorKind, setMenuAnchorKind] = useState<'checkbox' | 'more'>('checkbox')
   const rowRef = useRef<HTMLLIElement>(null)
   const checkboxRef = useRef<HTMLInputElement>(null)
   const moreRef = useRef<HTMLButtonElement>(null)
@@ -194,11 +200,17 @@ export function TaskRow({
 
   function handleTouchStart(event: TouchEvent<HTMLDivElement>) {
     if (isDesktop) return
+    // The "more" button is nested inside this same touch-handling container,
+    // so a press-and-hold on it bubbles up and would otherwise also arm the
+    // row's long-press gesture; its own click handler already opens the menu,
+    // and the gesture firing too closes what the click just opened.
+    if (moreRef.current?.contains(event.target as Node)) return
     const touch = event.touches[0]
     touchStartX.current = touch?.clientX ?? null
     touchStartY.current = touch?.clientY ?? null
     swipeCancelled.current = false
     longPressTimer.current = window.setTimeout(() => {
+      setMenuAnchorKind('checkbox')
       setMenuOpen(true)
     }, LONG_PRESS_MS)
   }
@@ -220,11 +232,21 @@ export function TaskRow({
     const touch = event.changedTouches[0]
     if (touch !== undefined && touchStartX.current !== null) {
       const dx = touch.clientX - touchStartX.current
-      if (dx < -SWIPE_THRESHOLD_PX) setMenuOpen(true)
+      if (dx < -SWIPE_THRESHOLD_PX) {
+        setMenuAnchorKind('checkbox')
+        setMenuOpen(true)
+      }
     }
     touchStartX.current = null
     touchStartY.current = null
   }
+
+  function handleMobileMenuButtonClick() {
+    setMenuAnchorKind('more')
+    setMenuOpen((value) => !value)
+  }
+
+  const menuAnchorRef = menuAnchorKind === 'more' ? moreRef : checkboxRef
 
   const menuItems: MenuItemConfig[] = [
     { key: 'edit', label: 'Изменить', onSelect: onOpenEditor },
@@ -268,9 +290,10 @@ export function TaskRow({
               onOpenEditor={onOpenEditor}
               onQuickChange={onQuickChange}
               moreRef={moreRef}
-              checkboxRef={checkboxRef}
               menuOpen={menuOpen}
               setMenuOpen={setMenuOpen}
+              menuAnchorRef={menuAnchorRef}
+              onMobileMenuButtonClick={handleMobileMenuButtonClick}
               menuItems={menuItems}
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
@@ -330,9 +353,10 @@ export function TaskRow({
         onOpenEditor={onOpenEditor}
         onQuickChange={onQuickChange}
         moreRef={moreRef}
-        checkboxRef={checkboxRef}
         menuOpen={menuOpen}
         setMenuOpen={setMenuOpen}
+        menuAnchorRef={menuAnchorRef}
+        onMobileMenuButtonClick={handleMobileMenuButtonClick}
         menuItems={menuItems}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -366,9 +390,10 @@ interface RowBodyProps {
   onOpenEditor: () => void
   onQuickChange: (patch: TaskPatch) => void
   moreRef: RefObject<HTMLButtonElement | null>
-  checkboxRef: RefObject<HTMLInputElement | null>
   menuOpen: boolean
   setMenuOpen: (value: boolean) => void
+  menuAnchorRef: RefObject<HTMLElement | null>
+  onMobileMenuButtonClick: () => void
   menuItems: MenuItemConfig[]
   onTouchStart: (event: TouchEvent<HTMLDivElement>) => void
   onTouchMove: (event: TouchEvent<HTMLDivElement>) => void
@@ -395,9 +420,10 @@ function RowBody({
   onOpenEditor,
   onQuickChange,
   moreRef,
-  checkboxRef,
   menuOpen,
   setMenuOpen,
+  menuAnchorRef,
+  onMobileMenuButtonClick,
   menuItems,
   onTouchStart,
   onTouchMove,
@@ -498,6 +524,7 @@ function RowBody({
             icon={<MoreIcon />}
             aria-label={`Действия с задачей: ${task.title}`}
             aria-haspopup="menu"
+            aria-expanded={menuOpen}
             tabIndex={tabIndex}
             onClick={() => setMenuOpen(!menuOpen)}
           />
@@ -509,9 +536,22 @@ function RowBody({
         </div>
       )}
 
-      {!isDesktop && menuOpen && (
-        <div className="absolute top-full right-0 z-(--z-dropdown) mt-(--space-2)">
-          <Menu items={menuItems} anchorRef={checkboxRef} onClose={() => setMenuOpen(false)} />
+      {!isDesktop && (
+        <div className="relative flex shrink-0 items-center">
+          <IconButton
+            ref={moreRef}
+            icon={<MoreIcon />}
+            aria-label={`Действия с задачей: ${task.title}`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            tabIndex={tabIndex}
+            onClick={onMobileMenuButtonClick}
+          />
+          {menuOpen && (
+            <div className="absolute top-full right-0 z-(--z-dropdown) mt-(--space-2)">
+              <Menu items={menuItems} anchorRef={menuAnchorRef} onClose={() => setMenuOpen(false)} />
+            </div>
+          )}
         </div>
       )}
     </div>
