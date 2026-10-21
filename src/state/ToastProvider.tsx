@@ -1,8 +1,10 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Toast } from '../components/Toast'
 import type { ToastVariant } from '../components/Toast'
 import { cn } from '../lib/cn'
+import { ToastContext } from './useToast'
+import type { ToastContextValue } from './useToast'
 
 export interface ToastOptions {
   variant: ToastVariant
@@ -16,12 +18,6 @@ interface ToastEntry extends ToastOptions {
   id: string
   closing: boolean
 }
-
-export interface ToastContextValue {
-  pushToast: (options: ToastOptions) => void
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null)
 
 /** design-spec 3.17: lives 6s. Not on the --duration-* scale — that scale is
  * capped at 480ms for feedback to input, this is a dismissal timeout. */
@@ -44,14 +40,6 @@ interface TimerEntry {
   timeoutId: number | null
   remainingMs: number
   startedAt: number
-}
-
-export function useToast(): ToastContextValue {
-  const value = useContext(ToastContext)
-  if (value === null) {
-    throw new Error('useToast must be used inside <ToastProvider>.')
-  }
-  return value
 }
 
 /**
