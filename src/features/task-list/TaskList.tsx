@@ -1,4 +1,4 @@
-import { AnimatePresence } from 'framer-motion'
+import { AnimatePresence, Reorder } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 import { EmptyState } from '../../components/EmptyState'
 import { toDateKey } from '../../domain/dueDate'
@@ -13,6 +13,7 @@ import { FILTER_LABELS } from '../toolbar/filterLabels'
 import { CompletedSection } from './CompletedSection'
 import { TaskRow } from './TaskRow'
 import { useRovingFocus } from './useRovingFocus'
+import { useTaskReorder } from './useTaskReorder'
 
 const SETTLE_DELAY_MS = 600
 
@@ -158,6 +159,7 @@ export function TaskList({
 
   const activeIds = displayActive.map((task) => task.id)
   const roving = useRovingFocus(activeIds)
+  const reorder = useTaskReorder({ tasks, ids: activeIds, moveTask })
 
   function handleSave(id: string, patch: TaskPatch) {
     editTask(id, patch)
@@ -253,7 +255,14 @@ export function TaskList({
           <EmptyState variant="no-active" />
         )
       ) : (
-        <ul aria-label="Задачи" className="flex flex-col gap-(--space-1)">
+        <Reorder.Group
+          as="ul"
+          axis="y"
+          values={activeIds}
+          onReorder={reorder.handleReorder}
+          aria-label="Задачи"
+          className="flex flex-col gap-(--space-1)"
+        >
           <AnimatePresence initial={false}>
             {displayActive.map((task) => (
               <TaskRow
@@ -275,10 +284,17 @@ export function TaskList({
                 onSave={(patch) => handleSave(task.id, patch)}
                 onRemove={() => handleRemove(task)}
                 onQuickChange={(patch) => editTask(task.id, patch)}
+                reorder={{
+                  value: task.id,
+                  isMovable: !isDone(task),
+                  isGrabbed: reorder.grabbedId === task.id,
+                  onHandleKeyDown: (event) => reorder.handleHandleKeyDown(event, task.id),
+                  onHandleBlur: () => reorder.handleHandleBlur(task.id),
+                }}
               />
             ))}
           </AnimatePresence>
-        </ul>
+        </Reorder.Group>
       )}
 
       <CompletedSection

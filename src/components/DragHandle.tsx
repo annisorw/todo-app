@@ -5,6 +5,10 @@ import { cn } from '../lib/cn'
 export interface DragHandleProps extends ComponentPropsWithoutRef<'button'> {
   /** The task's own text — builds the required `aria-label="Переместить задачу: {title}"` (design-spec 3.14). */
   taskTitle: string
+  /** The row is held in keyboard grab mode (design-spec 6.4): `aria-grabbed`, and the cursor stays `grabbing`. */
+  isGrabbed?: boolean
+  /** The row can actually be dragged — adds `touch-action: none` so a touch-drag off the handle isn't taken for a scroll. */
+  isDraggable?: boolean
 }
 
 function GripIcon() {
@@ -22,15 +26,18 @@ function GripIcon() {
 
 /**
  * design-spec 3.14 — 20px glyph, 32×32 desktop / 44×44 mobile hit area,
- * `cursor: grab` → `grabbing`. This is the presentational slot only: the
- * pointer drag and the keyboard "grab → ↑/↓ → drop" mode (design-spec 6.4)
- * are [FELA-17](/FELA/issues/FELA-17)'s. `TaskRow` wires this in with no
- * drag-specific props yet; FELA-17 attaches its handlers through the
- * standard `ComponentPropsWithoutRef<'button'>` spread without touching this
- * component.
+ * `cursor: grab` → `grabbing`. Both ways of moving a row start here: the
+ * pointer drag (`TaskRow` starts Framer Motion's drag controls from this
+ * button's `onPointerDown`) and the keyboard grab mode of design-spec 6.4,
+ * whose handlers arrive through the standard button prop spread.
+ *
+ * `aria-grabbed` is deprecated in ARIA 1.1 with no replacement that works
+ * on a plain list, and the spec names it explicitly (6.4). It is the
+ * belt-and-braces half here anyway: the announcement in `LiveRegion` is
+ * what actually carries every step of the move.
  */
 export const DragHandle = forwardRef<HTMLButtonElement, DragHandleProps>(function DragHandle(
-  { taskTitle, className, ...rest },
+  { taskTitle, isGrabbed = false, isDraggable = false, className, ...rest },
   ref,
 ) {
   return (
@@ -38,8 +45,11 @@ export const DragHandle = forwardRef<HTMLButtonElement, DragHandleProps>(functio
       ref={ref}
       type="button"
       aria-label={`Переместить задачу: ${taskTitle}`}
+      aria-grabbed={isDraggable ? isGrabbed : undefined}
       className={cn(
-        'inline-flex size-11 shrink-0 cursor-grab items-center justify-center rounded-md text-tertiary transition-colors duration-(--duration-fast) ease-standard hover:text-secondary active:cursor-grabbing sm:size-8',
+        'inline-flex size-11 shrink-0 items-center justify-center rounded-md transition-colors duration-(--duration-fast) ease-standard sm:size-8',
+        isGrabbed ? 'cursor-grabbing text-accent-text' : 'cursor-grab text-tertiary hover:text-secondary active:cursor-grabbing',
+        isDraggable && 'touch-none',
         className,
       )}
       {...rest}

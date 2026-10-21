@@ -811,6 +811,21 @@ describe('TaskList', () => {
       )
     }
 
+    /**
+     * The wrapper directly inside the row that carries `task-add`'s
+     * translateY and `task-delete`'s translateX.
+     *
+     * The `<li>` itself can't: active rows are `Reorder.Item`s, which always
+     * register their own `x`/`y` for the drag offset and so always write a
+     * `transform`, whatever the motion preference says. The slide moved one
+     * level in for exactly that reason (`TaskRow`), and on this element
+     * "did framer register a transform-affecting value at all?" is still
+     * the question criterion 17 asks.
+     */
+    function slideStyle(row: HTMLElement | null): string {
+      return row?.firstElementChild?.getAttribute('style') ?? ''
+    }
+
     it('task-add drops the y-translate motion value, keeping only opacity', () => {
       stubReducedMotion(true)
       renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
@@ -818,9 +833,11 @@ describe('TaskList', () => {
       const row = screen.getByText('Купить молоко').closest('li')
       // Framer Motion only ever writes a `transform` style when a
       // transform-affecting value (here, `y`) is part of `initial`/
-      // `animate` — under reduced motion `TaskRow` passes `{ opacity }`
-      // alone, so the property never appears at all, not even as `none`.
-      expect(row?.getAttribute('style')).not.toContain('transform')
+      // `animate` — under reduced motion `TaskRow` passes neither, so the
+      // property never appears at all, not even as `none`.
+      expect(slideStyle(row)).not.toContain('transform')
+      // And the row element's own transform stays inert.
+      expect(row?.style.transform).toBe('none')
     })
 
     it('task-add keeps the y-translate motion value when motion is not reduced', () => {
@@ -828,7 +845,7 @@ describe('TaskList', () => {
       renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
 
       const row = screen.getByText('Купить молоко').closest('li')
-      expect(row?.getAttribute('style')).toContain('transform')
+      expect(slideStyle(row)).toContain('transform')
     })
 
     it('task-delete drops the x-translate/height motion values under reduced motion', async () => {
@@ -840,7 +857,8 @@ describe('TaskList', () => {
       await user.click(screen.getByRole('button', { name: /Действия с задачей/ }))
       await user.click(screen.getByRole('menuitem', { name: 'Удалить' }))
 
-      expect(row?.getAttribute('style')).not.toContain('transform')
+      expect(slideStyle(row)).not.toContain('transform')
+      expect(row?.style.transform).toBe('none')
       expect(row?.getAttribute('style')).not.toContain('height')
     })
   })
