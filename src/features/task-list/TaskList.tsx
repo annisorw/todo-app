@@ -1,16 +1,18 @@
-import { AnimatePresence } from 'framer-motion'
+import { AnimatePresence, Reorder } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 import { EmptyState } from '../../components/EmptyState'
 import { toDateKey } from '../../domain/dueDate'
 import type { Filter, TaskView } from '../../domain/filters'
 import { isDone } from '../../domain/task'
 import type { Task, TaskPatch } from '../../domain/task'
+import { useRowShortcuts } from '../shortcuts/useRowShortcuts'
 import { useToast } from '../../state/useToast'
 import { useTaskStore } from '../../state/useTaskStore'
 import { FILTER_LABELS } from '../toolbar/filterLabels'
 import { CompletedSection } from './CompletedSection'
 import { TaskRow } from './TaskRow'
 import { useRovingFocus } from './useRovingFocus'
+import { useTaskReorder } from './useTaskReorder'
 
 const SETTLE_DELAY_MS = 600
 
@@ -32,6 +34,16 @@ export interface TaskListProps {
   onSearchAll: () => void
 }
 
+/** A toggled-done task mid-`task-settle`, pinned to its pre-toggle slot. */
+interface SettlingEntry {
+  task: Task
+  /** Index in `view.active` the instant it toggled done — where the row stays until settle. */
+  index: number
+  /** `filter`/`query` at toggle time. A later change invalidates the snapshot (see `displayActive` below). */
+  filter: Filter
+  query: string
+}
+
 /**
  * design-spec 3.11/3.11a/S1/S5/S10, architecture section 7 — owns
  * `editingId` (one task editing at a time, local UI state per architecture
@@ -40,12 +52,15 @@ export interface TaskListProps {
  * job, already done by `Toolbar` — this component doesn't re-filter.
  *
  * `task-settle` (motion table, section 5): a task just marked done stays
- * rendered in its active slot for 600ms (its `completedAt` is already set,
- * so `TaskRow` shows the checked/struck-through state immediately) before
- * actually moving into `CompletedSection`. The move itself re-inserts it at
- * the *end* of the active list rather than its exact prior index for that
- * window — the underlying order back in `domain/taskList.ts` is untouched,
- * only this transient display list reorders, and only for ≤600ms.
+ * rendered in its *original* active slot for 600ms (its `completedAt` is
+ * already set, so `TaskRow` shows the checked/struck-through state
+ * immediately) before actually moving into `CompletedSection` — the
+ * underlying order back in `domain/taskList.ts` is untouched, only this
+ * transient display list reorders, and only for ≤600ms. A settling
+ * snapshot only renders while the `filter`/`query` it was taken under and
+ * the task itself still match the current ones — otherwise a filter/search
+ * change or a delete during the delay would show someone else's slot, or a
+ * since-removed task (FELA-126).
  */
 export function TaskList({
   view,
@@ -56,10 +71,11 @@ export function TaskList({
   onClearSearch,
   onSearchAll,
 }: TaskListProps) {
-  const { tasks, toggleTask, editTask, removeTask, restoreRemoved, clearCompleted, lastRemoved } = useTaskStore()
+  const { tasks, toggleTask, editTask, removeTask, restoreRemoved, moveTask, clearCompleted, lastRemoved } =
+    useTaskStore()
   const { pushToast } = useToast()
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [settling, setSettling] = useState<Record<string, Task>>({})
+  const [settling, setSettling] = useState<Record<string, SettlingEntry>>({})
   const settleTimers = useRef<Record<string, number>>({})
   const [todayKey] = useState(() => toDateKey(new Date()))
 
@@ -98,7 +114,11 @@ export function TaskList({
       // the settling snapshot has to apply the same transition itself,
       // or the row would render unchecked for the whole 600ms delay.
       const settledTask: Task = { ...task, completedAt: nowIso() }
-      setSettling((previous) => ({ ...previous, [task.id]: settledTask }))
+      // `view.active` here is still the pre-toggle list (this closure's
+      // `view` prop, not yet re-rendered) — exactly the slot the row has to
+      // hold until settle.
+      const index = view.active.findIndex((candidate) => candidate.id === task.id)
+      setSettling((previous) => ({ ...previous, [task.id]: { task: settledTask, index, filter, query } }))
       settleTimers.current[task.id] = window.setTimeout(() => {
         delete settleTimers.current[task.id]
         setSettling((previous) => {
@@ -118,12 +138,27 @@ export function TaskList({
     }
   }
 
-  const settlingTasks = Object.values(settling)
-  const displayActive = [...view.active, ...settlingTasks.filter((task) => !view.active.some((a) => a.id === task.id))]
-  const displayCompleted = view.completed.filter((task) => !(task.id in settling))
+  // A snapshot only counts while its `filter`/`query` still match the
+  // current ones and its task hasn't been deleted since — otherwise it's a
+  // foreign or stale slot and must not render (FELA-126 acceptance criteria
+  // 2). Sorted ascending so each splice below lands at its recorded index
+  // without later insertions shifting earlier ones out of place.
+  const validSettling = Object.values(settling)
+    .filter(
+      (entry) => entry.filter === filter && entry.query === query && tasks.some((candidate) => candidate.id === entry.task.id),
+    )
+    .sort((a, b) => a.index - b.index)
+
+  const displayActive = [...view.active]
+  for (const entry of validSettling) {
+    displayActive.splice(Math.min(entry.index, displayActive.length), 0, entry.task)
+  }
+  const settlingIds = new Set(validSettling.map((entry) => entry.task.id))
+  const displayCompleted = view.completed.filter((task) => !settlingIds.has(task.id))
 
   const activeIds = displayActive.map((task) => task.id)
   const roving = useRovingFocus(activeIds)
+  const reorder = useTaskReorder({ tasks, ids: activeIds, moveTask })
 
   function handleSave(id: string, patch: TaskPatch) {
     editTask(id, patch)
@@ -132,6 +167,23 @@ export function TaskList({
 
   function handleRemove(task: Task) {
     if (editingId === task.id) setEditingId(null)
+
+    // A delete landing mid-settle (FELA-126 acceptance criteria 2) must drop
+    // the snapshot right away rather than wait for the timer — `tasks` no
+    // longer having this id would also hide it at render time, but clearing
+    // here avoids an orphaned timeout outliving the task.
+    const existingTimer = settleTimers.current[task.id]
+    if (existingTimer !== undefined) {
+      window.clearTimeout(existingTimer)
+      delete settleTimers.current[task.id]
+    }
+    setSettling((previous) => {
+      if (!(task.id in previous)) return previous
+      const next = { ...previous }
+      delete next[task.id]
+      return next
+    })
+
     removeTask(task.id)
     pushToast({
       variant: 'danger',
@@ -145,6 +197,20 @@ export function TaskList({
       },
     })
   }
+
+  // One declaration for both row groups (design-spec 6.3, row-scoped half).
+  // The key belongs to this hook — FELA-20 owns all of 6.3 — while the order
+  // it writes belongs to `useTaskReorder.moveRow`: the one writer the pointer
+  // drag and both keyboard paths go through, so «на какую позицию» has a
+  // single answer (review R1).
+  const handleRowKeyDown = useRowShortcuts({
+    openEditor: setEditingId,
+    removeTask: (taskId) => {
+      const task = tasks.find((candidate) => candidate.id === taskId)
+      if (task !== undefined) handleRemove(task)
+    },
+    moveTask: reorder.moveRow,
+  })
 
   return (
     <div id={panelId} role="tabpanel" aria-labelledby={activeTabId}>
@@ -163,7 +229,14 @@ export function TaskList({
           <EmptyState variant="no-active" />
         )
       ) : (
-        <ul aria-label="Задачи" className="flex flex-col gap-(--space-1)">
+        <Reorder.Group
+          as="ul"
+          axis="y"
+          values={activeIds}
+          onReorder={reorder.handleReorder}
+          aria-label="Задачи"
+          className="flex flex-col gap-(--space-1)"
+        >
           <AnimatePresence initial={false}>
             {displayActive.map((task) => (
               <TaskRow
@@ -176,16 +249,33 @@ export function TaskList({
                 registerRef={(node) => roving.registerRef(task.id, node)}
                 onFocus={() => roving.handleFocus(task.id)}
                 onKeyDown={(event) => roving.handleKeyDown(event, task.id)}
+                onRowKeyDown={(event) =>
+                  handleRowKeyDown(event, task.id, () => roving.focusNeighbourOf(task.id))
+                }
                 onToggle={() => handleToggle(task)}
                 onOpenEditor={() => setEditingId(task.id)}
                 onCloseEditor={() => setEditingId(null)}
                 onSave={(patch) => handleSave(task.id, patch)}
                 onRemove={() => handleRemove(task)}
                 onQuickChange={(patch) => editTask(task.id, patch)}
+                reorder={{
+                  value: task.id,
+                  isMovable: !isDone(task),
+                  isGrabbed: reorder.grabbedId === task.id,
+                  // Grab mode gets the key first and `preventDefault`s what it
+                  // uses; whatever it leaves alone bubbles on to the row's
+                  // `useRowShortcuts`, which skips an already handled event.
+                  // So `Ctrl/Cmd+↑`/`↓` works from the handle too, and a held
+                  // row's plain `↑`/`↓` never reaches the roving focus move.
+                  onHandleKeyDown: (event) => reorder.handleHandleKeyDown(event, task.id),
+                  onHandleBlur: () => reorder.handleHandleBlur(task.id),
+                  onDragStart: () => reorder.handleDragStart(task.id),
+                  onDragEnd: reorder.handleDragEnd,
+                }}
               />
             ))}
           </AnimatePresence>
-        </ul>
+        </Reorder.Group>
       )}
 
       <CompletedSection
@@ -194,6 +284,7 @@ export function TaskList({
         query={query}
         todayKey={todayKey}
         editingId={editingId}
+        onRowKeyDown={handleRowKeyDown}
         onToggle={(id) => {
           const task = displayCompleted.find((candidate) => candidate.id === id)
           if (task) handleToggle(task)

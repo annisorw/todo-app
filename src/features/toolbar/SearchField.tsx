@@ -74,7 +74,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
       {isEmpty && !focused && (
         <kbd
           aria-hidden="true"
-          className="rounded-(--radius-xs) border border-surface-border-strong px-(--space-1) text-caption text-tertiary"
+          className="rounded-(--radius-xs) border border-surface-border-strong px-(--space-1) text-caption text-mono-num text-tertiary"
         >
           /
         </kbd>
@@ -85,7 +85,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
           type="button"
           aria-label="Очистить поиск"
           onClick={() => onChange('')}
-          className="inline-flex size-6 shrink-0 items-center justify-center rounded-(--radius-xs) text-tertiary transition-colors duration-(--duration-fast) ease-standard hover:text-secondary"
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-(--radius-xs) text-tertiary transition-colors duration-(--duration-fast) ease-standard hover:text-secondary sm:size-6"
         >
           <ClearIcon />
         </button>
