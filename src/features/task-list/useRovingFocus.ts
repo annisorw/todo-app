@@ -63,7 +63,12 @@ export function useRovingFocus(ids: string[]): RovingFocus {
     nodes.current.set(id, node)
     if (pendingFocusId.current === id) {
       pendingFocusId.current = null
-      node.focus()
+      // Only reclaim focus the remount actually dropped: between teardown
+      // and re-attach, focus falls to `<body>` (or nothing). If something
+      // else holds it now, the person moved it there on purpose — e.g. to
+      // the search field — and the switch back must not steal it away.
+      const active = document.activeElement
+      if (active === null || active === document.body) node.focus()
     }
   }, [])
 

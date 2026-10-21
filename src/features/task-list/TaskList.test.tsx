@@ -1081,6 +1081,45 @@ describe('TaskList', () => {
       expect(screen.getByRole('checkbox', { name: 'Активная' })).toHaveFocus()
     })
 
+    it('does not steal focus back from a deliberate move made while the row was unmounted (FELA-212)', () => {
+      function withExternalButton(filter: Filter) {
+        return (
+          <TaskStoreProvider>
+            <ToastProvider>
+              <LiveRegion />
+              <button type="button">Снаружи</button>
+              <Harness filter={filter} />
+            </ToastProvider>
+          </TaskStoreProvider>
+        )
+      }
+
+      seed([
+        makeTask({ id: 't1', title: 'Активная' }),
+        makeTask({ id: 't2', title: 'Готовая', completedAt: '2026-10-20T10:00:00.000Z' }),
+      ])
+      const { rerender } = render(withExternalButton('all'))
+
+      const checkbox = screen.getByRole('checkbox', { name: 'Активная' })
+      checkbox.focus()
+      expect(checkbox).toHaveFocus()
+
+      // 't1' is filtered out under 'completed' — its node tears down while
+      // it still holds focus, arming `pendingFocusId`.
+      rerender(withExternalButton('completed'))
+
+      // The user deliberately moves focus elsewhere — e.g. the search field
+      // or composer in the real app — before switching the segment back.
+      screen.getByRole('button', { name: 'Снаружи' }).focus()
+      expect(screen.getByRole('button', { name: 'Снаружи' })).toHaveFocus()
+
+      // 't1' remounts on the switch back to 'all'. It must not reclaim
+      // focus from where the person put it on purpose.
+      rerender(withExternalButton('all'))
+
+      expect(screen.getByRole('button', { name: 'Снаружи' })).toHaveFocus()
+    })
+
     it('does not break roving focus or tab/tabpanel wiring across a quick filter switch', () => {
       const { rerender } = renderTaskList(
         [
