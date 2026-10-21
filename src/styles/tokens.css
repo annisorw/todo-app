@@ -168,6 +168,10 @@
   --shadow-md: 0 8px 24px -4px rgba(3,3,10,.42);
   --shadow-lg: 0 24px 64px -12px rgba(3,3,10,.56);
   --shadow-glow-accent: 0 0 0 1px rgba(124,92,248,.45), 0 8px 32px -8px rgba(124,92,248,.45);
+  /* FELA-196 / spec v1.14 §2.7 — the focus glow's "error" colour. A wider
+   * ring (2px, not 1px) and a different alpha than --shadow-glow-accent on
+   * purpose, not the accent value with the colour swapped. */
+  --shadow-glow-danger: 0 0 0 2px rgba(251,113,133,.62), 0 8px 32px -8px rgba(251,113,133,.45);
   --shadow-drag: 0 18px 44px -8px rgba(3,3,10,.60);
 
   --blur-surface: 20px;
@@ -277,6 +281,7 @@
   --shadow-md: 0 10px 28px -6px rgba(17,17,34,.11);
   --shadow-lg: 0 26px 64px -14px rgba(17,17,34,.16);
   --shadow-glow-accent: 0 0 0 1px rgba(109,69,240,.35), 0 8px 28px -10px rgba(109,69,240,.35);
+  --shadow-glow-danger: 0 0 0 2px rgba(192,27,65,.65), 0 8px 28px -10px rgba(192,27,65,.35);
   --shadow-drag: 0 18px 44px -10px rgba(17,17,34,.22);
 }
 
@@ -353,6 +358,9 @@
 }
 @utility shadow-glow-accent {
   box-shadow: var(--shadow-glow-accent);
+}
+@utility shadow-glow-danger {
+  box-shadow: var(--shadow-glow-danger);
 }
 @utility shadow-drag {
   box-shadow: var(--shadow-drag);

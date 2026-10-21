@@ -5,10 +5,12 @@ import { createRef } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { LiveRegion } from '../../components/LiveRegion'
 import type { Filter } from '../../domain/filters'
-import { MAX_TITLE_LENGTH, TITLE_COUNTER_THRESHOLD } from '../../domain/limits'
+import { MAX_TASKS, MAX_TITLE_LENGTH, TITLE_COUNTER_THRESHOLD } from '../../domain/limits'
+import { writeTasks } from '../../storage/taskStorage'
 import { TaskStoreProvider } from '../../state/TaskStoreProvider'
 import { ToastProvider } from '../../state/ToastProvider'
 import { useTaskStore } from '../../state/useTaskStore'
+import { makeTasks } from '../../test/factories'
 import { stubMatchMedia } from '../../test/matchMedia'
 import { Composer } from './Composer'
 import type { ComposerHandle } from './Composer'
@@ -154,7 +156,29 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'Добавить задачу в список' })).toHaveFocus()
   })
 
-  it('still shows a focus indicator on desktop when the field is focused and in error (acceptance criterion 24)', async () => {
+  it('on desktop, focus alone (no error) lights the accent glow, not the plain shadow', async () => {
+    const user = userEvent.setup()
+    const { container } = renderComposer()
+
+    const field = screen.getByRole('textbox', { name: 'Текст новой задачи' })
+    await user.click(field)
+
+    const panel = container.querySelector('[class*="radius-xl"]')
+    expect(panel).not.toBeNull()
+    expect(panel).toHaveClass('shadow-glow-accent')
+    expect(panel).not.toHaveClass('shadow-sm')
+  })
+
+  it('on desktop, no focus and no error falls back to the plain shadow', () => {
+    const { container } = renderComposer()
+
+    const panel = container.querySelector('[class*="radius-xl"]')
+    expect(panel).not.toBeNull()
+    expect(panel).toHaveClass('shadow-sm')
+    expect(panel).not.toHaveClass('shadow-glow-accent')
+  })
+
+  it('on desktop, an error while still focused keeps the border error-coloured and switches the glow to danger (FELA-106, FELA-196 §3.7)', async () => {
     const user = userEvent.setup()
     const { container } = renderComposer()
 
@@ -167,9 +191,51 @@ describe('Composer', () => {
 
     const panel = container.querySelector('[class*="radius-xl"]')
     expect(panel).not.toBeNull()
-    // The border is busy showing validity (`border-danger`); the glow is the
-    // only thing left to show focus, so it must not be suppressed by the error.
-    expect(panel).toHaveClass('border-danger', 'shadow-glow-accent')
+    // The border carries the error, same as before. The glow (spec v1.14):
+    // it stays lit while focused, it only changes colour — exactly one
+    // indicator pair, never a mix of the accent glow with the error border.
+    expect(panel).toHaveClass('border-danger')
+    expect(panel).toHaveClass('shadow-glow-danger')
+    expect(panel).not.toHaveClass('shadow-glow-accent')
+    expect(panel).not.toHaveClass('shadow-sm')
+  })
+
+  it('on desktop, an error without focus drops the glow entirely, same as the no-error case', async () => {
+    const user = userEvent.setup()
+    const { container } = renderComposer()
+
+    const field = screen.getByRole('textbox', { name: 'Текст новой задачи' })
+    await user.click(field)
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('alert')).toHaveTextContent('Введите текст задачи.')
+
+    await user.tab()
+    expect(field).not.toHaveFocus()
+
+    const panel = container.querySelector('[class*="radius-xl"]')
+    expect(panel).not.toBeNull()
+    expect(panel).toHaveClass('border-danger')
+    expect(panel).toHaveClass('shadow-sm')
+    expect(panel).not.toHaveClass('shadow-glow-danger')
+    expect(panel).not.toHaveClass('shadow-glow-accent')
+  })
+
+  it('on desktop, atLimit (error with no submit, no typing) still switches the glow to danger on focus', async () => {
+    const user = userEvent.setup()
+    writeTasks(makeTasks(MAX_TASKS))
+    const { container } = renderComposer()
+
+    const field = screen.getByRole('textbox', { name: 'Текст новой задачи' })
+    await user.click(field)
+    expect(field).toHaveFocus()
+    expect(screen.getByRole('alert')).toHaveTextContent('Список заполнен')
+
+    const panel = container.querySelector('[class*="radius-xl"]')
+    expect(panel).not.toBeNull()
+    expect(panel).toHaveClass('border-danger')
+    expect(panel).toHaveClass('shadow-glow-danger')
+    expect(panel).not.toHaveClass('shadow-glow-accent')
+    expect(panel).not.toHaveClass('shadow-sm')
   })
 
   it('carries the .composer class on the glass panel (spec 2.7 fallback hook)', () => {
@@ -193,7 +259,36 @@ describe('Composer', () => {
     expect(screen.getByText('Из шторки')).toBeInTheDocument()
   })
 
-  it('still shows a focus indicator in the sheet when the field is focused and in error (acceptance criterion 24)', async () => {
+  it('in the sheet, autofocus alone (no error) lights the accent glow', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    await user.click(screen.getByRole('button', { name: 'Добавить задачу' }))
+    const dialog = screen.getByRole('dialog', { name: 'Добавить задачу' })
+    const field = within(dialog).getByRole('textbox', { name: 'Текст новой задачи' })
+    expect(field).toHaveFocus()
+
+    const fieldBox = field.closest('[class*="radius-md"]')
+    expect(fieldBox).not.toBeNull()
+    expect(fieldBox).toHaveClass('shadow-glow-accent')
+  })
+
+  it('in the sheet, tabbing away from the field (no error) drops the glow entirely', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    await user.click(screen.getByRole('button', { name: 'Добавить задачу' }))
+    const dialog = screen.getByRole('dialog', { name: 'Добавить задачу' })
+    const field = within(dialog).getByRole('textbox', { name: 'Текст новой задачи' })
+    const fieldBox = field.closest('[class*="radius-md"]')
+    expect(fieldBox).not.toBeNull()
+
+    await user.tab()
+    expect(within(dialog).getByRole('button', { name: 'Приоритет' })).toHaveFocus()
+    expect(fieldBox).not.toHaveClass('shadow-glow-accent')
+  })
+
+  it('in the sheet, an error while still focused keeps the border error-coloured and switches the glow to danger (FELA-106, FELA-196 §3.7)', async () => {
     const user = userEvent.setup()
     renderComposer()
 
@@ -209,7 +304,49 @@ describe('Composer', () => {
 
     const fieldBox = field.closest('[class*="radius-md"]')
     expect(fieldBox).not.toBeNull()
-    expect(fieldBox).toHaveClass('border-danger', 'shadow-glow-accent')
+    expect(fieldBox).toHaveClass('border-danger')
+    expect(fieldBox).toHaveClass('shadow-glow-danger')
+    expect(fieldBox).not.toHaveClass('shadow-glow-accent')
+  })
+
+  it('in the sheet, atLimit (error with no submit, no typing) still switches the glow to danger on autofocus', async () => {
+    const user = userEvent.setup()
+    writeTasks(makeTasks(MAX_TASKS))
+    renderComposer()
+
+    await user.click(screen.getByRole('button', { name: 'Добавить задачу' }))
+    const dialog = screen.getByRole('dialog', { name: 'Добавить задачу' })
+    const field = within(dialog).getByRole('textbox', { name: 'Текст новой задачи' })
+    expect(field).toHaveFocus()
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Список заполнен')
+
+    const fieldBox = field.closest('[class*="radius-md"]')
+    expect(fieldBox).not.toBeNull()
+    expect(fieldBox).toHaveClass('border-danger')
+    expect(fieldBox).toHaveClass('shadow-glow-danger')
+    expect(fieldBox).not.toHaveClass('shadow-glow-accent')
+  })
+
+  it('in the sheet, an error without focus drops the glow entirely', async () => {
+    const user = userEvent.setup()
+    renderComposer()
+
+    await user.click(screen.getByRole('button', { name: 'Добавить задачу' }))
+    const dialog = screen.getByRole('dialog', { name: 'Добавить задачу' })
+    const field = within(dialog).getByRole('textbox', { name: 'Текст новой задачи' })
+    expect(field).toHaveFocus()
+
+    await user.keyboard('{Enter}')
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Введите текст задачи.')
+
+    await user.tab()
+    expect(field).not.toHaveFocus()
+
+    const fieldBox = field.closest('[class*="radius-md"]')
+    expect(fieldBox).not.toBeNull()
+    expect(fieldBox).toHaveClass('border-danger')
+    expect(fieldBox).not.toHaveClass('shadow-glow-danger')
+    expect(fieldBox).not.toHaveClass('shadow-glow-accent')
   })
 })
 
