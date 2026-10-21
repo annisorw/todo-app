@@ -133,6 +133,7 @@ export function TaskRow({
   onQuickChange,
 }: TaskRowProps) {
   const isDesktop = useMediaQuery('(min-width: 640px)')
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const [menuOpen, setMenuOpen] = useState(false)
   const rowRef = useRef<HTMLLIElement>(null)
   const checkboxRef = useRef<HTMLInputElement>(null)
@@ -233,9 +234,13 @@ export function TaskRow({
     return (
       <motion.li
         ref={rowRef}
-        layout
+        // `editor-open` (motion table, section 5): under reduced motion the
+        // switch to `TaskEditor`/`TaskEditorSheet` is instant and never
+        // animates height — disabling `layout` drops the interpolated
+        // resize, and a zero-duration transition drops everything else.
+        layout={!prefersReducedMotion}
         className={isDesktop ? undefined : 'relative'}
-        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
       >
         {isDesktop ? (
           <TaskEditor task={task} onSave={onSave} onCancel={onCloseEditor} />
@@ -278,11 +283,16 @@ export function TaskRow({
   return (
     <motion.li
       ref={rowRef}
-      layout
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: 12, height: 0 }}
-      transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+      // `task-settle`/`list-reflow` (motion table, section 5): under reduced
+      // motion reordering is instant, so the `layout` interpolation is off.
+      // `task-add`/`task-delete` keep a 120ms fade (the table's own figure
+      // for those two rows) but drop every non-opacity property — no
+      // vertical/horizontal translate on enter/exit, no collapsing height.
+      layout={!prefersReducedMotion}
+      initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+      animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+      exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: 12, height: 0 }}
+      transition={prefersReducedMotion ? { duration: 0.12 } : { duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
       className="relative"
     >
       <RowBody

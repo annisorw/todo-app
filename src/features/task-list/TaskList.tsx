@@ -4,13 +4,17 @@ import { toDateKey } from '../../domain/dueDate'
 import type { Filter, TaskView } from '../../domain/filters'
 import { isDone } from '../../domain/task'
 import type { Task, TaskPatch } from '../../domain/task'
-import { useToast } from '../../state/ToastProvider'
+import { useToast } from '../../state/useToast'
 import { useTaskStore } from '../../state/useTaskStore'
 import { CompletedSection } from './CompletedSection'
 import { TaskRow } from './TaskRow'
 import { useRovingFocus } from './useRovingFocus'
 
 const SETTLE_DELAY_MS = 600
+
+function nowIso(): string {
+  return new Date().toISOString()
+}
 
 export interface TaskListProps {
   view: TaskView
@@ -79,7 +83,7 @@ export function TaskList({ view, query, filter, panelId, activeTabId }: TaskList
       // store's own update won't reach this render until the next one, so
       // the settling snapshot has to apply the same transition itself,
       // or the row would render unchecked for the whole 600ms delay.
-      const settledTask: Task = { ...task, completedAt: new Date().toISOString() }
+      const settledTask: Task = { ...task, completedAt: nowIso() }
       setSettling((previous) => ({ ...previous, [task.id]: settledTask }))
       settleTimers.current[task.id] = window.setTimeout(() => {
         delete settleTimers.current[task.id]

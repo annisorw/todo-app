@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import { ErrorBanner } from './components/ErrorBanner'
 import { segmentTabId } from './components/segmentTabId'
+import { isDone } from './domain/task'
 import { Composer } from './features/composer/Composer'
 import { TaskList } from './features/task-list/TaskList'
 import { Toolbar } from './features/toolbar/Toolbar'
@@ -23,8 +24,8 @@ function AppBody() {
   const panelId = useId()
   const tabIdPrefix = useId()
 
-  const activeCount = tasks.filter((task) => task.completedAt === null).length
-  const completedCount = tasks.length - activeCount
+  const completedCount = tasks.filter(isDone).length
+  const activeCount = tasks.length - completedCount
   const summary =
     tasks.length === 0
       ? 'Добавьте первую задачу — список появится здесь.'

@@ -567,6 +567,58 @@ describe('TaskList', () => {
     })
   })
 
+  describe('prefers-reduced-motion (motion table, section 5 / acceptance criterion 17)', () => {
+    // `stubMatchMedia` from `test/matchMedia.ts` answers every query the
+    // same way, so it can't set "desktop" and "reduced motion" separately —
+    // these two tests need both at once (desktop, to get the row actions
+    // that trigger task-add/task-delete; reduced motion, to check the
+    // branch under test). Stub each query independently instead.
+    function stubReducedMotion(reduced: boolean) {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn((query: string) => ({
+          matches: query.includes('reduced-motion') ? reduced : true,
+          media: query,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        })),
+      )
+    }
+
+    it('task-add drops the y-translate motion value, keeping only opacity', () => {
+      stubReducedMotion(true)
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const row = screen.getByText('Купить молоко').closest('li')
+      // Framer Motion only ever writes a `transform` style when a
+      // transform-affecting value (here, `y`) is part of `initial`/
+      // `animate` — under reduced motion `TaskRow` passes `{ opacity }`
+      // alone, so the property never appears at all, not even as `none`.
+      expect(row?.getAttribute('style')).not.toContain('transform')
+    })
+
+    it('task-add keeps the y-translate motion value when motion is not reduced', () => {
+      stubReducedMotion(false)
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const row = screen.getByText('Купить молоко').closest('li')
+      expect(row?.getAttribute('style')).toContain('transform')
+    })
+
+    it('task-delete drops the x-translate/height motion values under reduced motion', async () => {
+      stubReducedMotion(true)
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const row = screen.getByText('Купить молоко').closest('li')
+      await user.click(screen.getByRole('button', { name: /Действия с задачей/ }))
+      await user.click(screen.getByRole('menuitem', { name: 'Удалить' }))
+
+      expect(row?.getAttribute('style')).not.toContain('transform')
+      expect(row?.getAttribute('style')).not.toContain('height')
+    })
+  })
+
   describe('empty states', () => {
     it('shows a message when there are no tasks at all', () => {
       renderTaskList([])
