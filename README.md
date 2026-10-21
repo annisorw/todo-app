@@ -5,7 +5,7 @@ no backend, and no sync — every task lives in your browser's `localStorage`, o
 own machine. It is for one person who wants a calm, keyboard-friendly list for a single
 day or week, not a team task tracker.
 
-**Live demo:** not published yet — DevOps will add the link here once the app ships.
+**Live demo:** https://annisorw.github.io/todo-app/
 
 ## Tech stack
 
@@ -143,9 +143,9 @@ table) is always weight 400 through the single `.text-mono-num` class — never 
   priority or due date on mobile always goes through that sheet.
 - **Filter and search.** Use the All / Active / Completed segments, or the search field,
   to narrow the list; they combine, and each segment shows a live count.
-- **Reorder tasks.** Drag a row by its handle, or do it from the keyboard: focus a row,
-  press `Space` to pick it up, `↑`/`↓` to move it, `Space` again to drop it, `Esc` to
-  cancel. On mobile there is no drag handle; open the row's menu and choose
+- **Reorder tasks.** Drag a row by its handle, or do it from the keyboard: focus the
+  row's drag handle, press `Space` to pick it up, `↑`/`↓` to move it, `Space` again to
+  drop it, `Esc` to cancel. On mobile there is no drag handle; open the row's menu and choose
   "Переместить" for the same up/down controls without a mouse. `Ctrl`/`Cmd`+`↑`/`↓` on a
   focused row also moves it one step at a time, on any device, without entering that
   mode.
