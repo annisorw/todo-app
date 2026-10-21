@@ -74,7 +74,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
       {isEmpty && !focused && (
         <kbd
           aria-hidden="true"
-          className="rounded-(--radius-xs) border border-surface-border-strong px-(--space-1) text-caption text-tertiary"
+          className="rounded-(--radius-xs) border border-surface-border-strong px-(--space-1) text-caption text-mono-num text-tertiary"
         >
           /
         </kbd>

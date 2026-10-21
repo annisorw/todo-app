@@ -32,8 +32,11 @@ function CheckGlyph() {
 /**
  * design-spec 3.15 — generic `role="menu"` popover: focus goes to the first
  * item on open, ↑/↓ wrap between items, Esc closes and returns focus to the
- * trigger, a click outside closes. `PrioritySelect` is the first caller;
- * `TaskRow`'s `more` menu (Изменить/Удалить) reuses it unchanged later.
+ * trigger, a click outside closes. Tab/Shift+Tab wrap within the menuitems
+ * too (§7: nested popups keep their own trap) instead of escaping into
+ * whatever follows the trigger chip in the host's tab order. `PrioritySelect`
+ * is the first caller; `TaskRow`'s `more` menu (Изменить/Удалить) reuses it
+ * unchanged later.
  *
  * Esc comes from the one app-wide owner (`lib/dismissStack.ts` via
  * `useDismissable`), so a menu opened inside a dialog or the row editor takes
@@ -65,6 +68,11 @@ export function Menu({ id, items, anchorRef, onClose, className }: MenuProps) {
     } else if (event.key === 'ArrowUp') {
       event.preventDefault()
       focusItem(current - 1)
+    } else if (event.key === 'Tab') {
+      // design-spec §7 — nested popups keep their own Tab trap: Tab/Shift+Tab
+      // cycle the menuitems instead of escaping into the row editor.
+      event.preventDefault()
+      focusItem(event.shiftKey ? current - 1 : current + 1)
     }
   }
 
