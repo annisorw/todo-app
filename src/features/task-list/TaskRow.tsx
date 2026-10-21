@@ -16,6 +16,7 @@ import type { Task, TaskPatch } from '../../domain/task'
 import { cn } from '../../lib/cn'
 import { highlight } from '../../lib/highlight'
 import { useMediaQuery } from '../../lib/useMediaQuery'
+import { taskRowMarker } from '../shortcuts/taskRowMarker'
 import { TaskEditor } from './TaskEditor'
 import { TaskEditorSheet } from './TaskEditorSheet'
 
@@ -32,7 +33,15 @@ export interface TaskRowProps {
   isEditing: boolean
   registerRef: (node: HTMLElement | null) => void
   onFocus: () => void
+  /** Roving tabindex (`useRovingFocus`): ↑/↓ between rows, on the checkbox only. */
   onKeyDown: (event: KeyboardEvent) => void
+  /**
+   * Row-scoped hot keys (`useRowShortcuts`): `E`, `Delete`/`Backspace`,
+   * `Ctrl/Cmd+↑`/`↓`. Sits on the row element rather than on the checkbox so
+   * it still fires when Tab has moved focus to the handle, the actions or a
+   * chip inside this row.
+   */
+  onRowKeyDown: (event: KeyboardEvent) => void
   onToggle: () => void
   onOpenEditor: () => void
   onCloseEditor: () => void
@@ -127,6 +136,7 @@ export function TaskRow({
   registerRef,
   onFocus,
   onKeyDown,
+  onRowKeyDown,
   onToggle,
   onOpenEditor,
   onCloseEditor,
@@ -180,15 +190,6 @@ export function TaskRow({
     if (wasEditingRef.current && !isEditing) checkboxRef.current?.focus()
     wasEditingRef.current = isEditing
   }, [isEditing])
-
-  function handleCheckboxKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    onKeyDown(event)
-    if (event.defaultPrevented) return
-    if (event.key.toLowerCase() === 'e' && !event.metaKey && !event.ctrlKey && !event.altKey) {
-      event.preventDefault()
-      onOpenEditor()
-    }
-  }
 
   function clearLongPress() {
     if (longPressTimer.current !== null) {
@@ -256,6 +257,8 @@ export function TaskRow({
     return (
       <motion.li
         ref={rowRef}
+        {...taskRowMarker}
+        onKeyDown={onRowKeyDown}
         // `editor-open` (motion table, section 5): under reduced motion the
         // switch to `TaskEditor`/`TaskEditorSheet` is instant and never
         // animates height — disabling `layout` drops the interpolated
@@ -282,7 +285,7 @@ export function TaskRow({
               labelledBy={labelledBy}
               setCheckboxNode={setCheckboxNode}
               onFocus={onFocus}
-              onCheckboxKeyDown={handleCheckboxKeyDown}
+              onCheckboxKeyDown={onKeyDown}
               onToggle={onToggle}
               onOpenEditor={onOpenEditor}
               onQuickChange={onQuickChange}
@@ -306,6 +309,11 @@ export function TaskRow({
   return (
     <motion.li
       ref={rowRef}
+      // Marks the row for `useGlobalShortcuts`: `Esc` on an empty dismiss
+      // stack drops focus out of a row («снять выделение»), and that is the
+      // one thing it cannot learn from the React tree.
+      {...taskRowMarker}
+      onKeyDown={onRowKeyDown}
       // `task-settle`/`list-reflow` (motion table, section 5): under reduced
       // motion reordering is instant, so the `layout` interpolation is off.
       // `task-add`/`task-delete` keep a 120ms fade (the table's own figure
@@ -340,7 +348,7 @@ export function TaskRow({
         labelledBy={labelledBy}
         setCheckboxNode={setCheckboxNode}
         onFocus={onFocus}
-        onCheckboxKeyDown={handleCheckboxKeyDown}
+        onCheckboxKeyDown={onKeyDown}
         onToggle={onToggle}
         onOpenEditor={onOpenEditor}
         onQuickChange={onQuickChange}
@@ -377,7 +385,7 @@ interface RowBodyProps {
   labelledBy: string
   setCheckboxNode: (node: HTMLInputElement | null) => void
   onFocus: () => void
-  onCheckboxKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
+  onCheckboxKeyDown: (event: KeyboardEvent) => void
   onToggle: () => void
   onOpenEditor: () => void
   onQuickChange: (patch: TaskPatch) => void
