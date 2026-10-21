@@ -110,6 +110,10 @@ jobs:
       - name: Verify registry signatures
         run: npm audit signatures
 
+      # Must stay ahead of Typecheck and Build: those execute this binary.
+      - name: Verify the native tsc binary is signed by Microsoft
+        run: ./.github/scripts/verify-native-binaries.sh
+
       - name: Install OSV-Scanner
         run: |
           curl -sSLo osv-scanner "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"

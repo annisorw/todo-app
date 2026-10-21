@@ -1,6 +1,8 @@
-import { useId, useRef, useState } from 'react'
+import { useId, useImperativeHandle, useRef, useState } from 'react'
+import type { Ref } from 'react'
 import { Fab } from '../../layout/Fab'
 import { useTaskStore } from '../../state/useTaskStore'
+import { useMediaQuery } from '../../lib/useMediaQuery'
 import { cn } from '../../lib/cn'
 import { ComposerChips } from './ComposerChips'
 import { ComposerFieldMeta } from './ComposerFieldMeta'
@@ -8,6 +10,21 @@ import { ComposerSheet } from './ComposerSheet'
 import { ComposerSubmit } from './ComposerSubmit'
 import { ComposerTextarea } from './ComposerTextarea'
 import { useComposerForm } from './useComposerForm'
+
+export interface ComposerHandle {
+  /**
+   * design-spec S2 — the `first-run` `EmptyState`'s "Добавить задачу" action
+   * puts focus in the field, same command as the `N` shortcut (FELA-20).
+   * Desktop focuses the panel's own textarea; mobile has no visible field
+   * to focus (it's `Fab` + a sheet instead), so it opens the sheet, which
+   * autofocuses its own textarea already.
+   */
+  requestNewTask: () => void
+}
+
+export interface ComposerProps {
+  ref?: Ref<ComposerHandle>
+}
 
 /**
  * design-spec 3.7 + S2 — the glass panel on desktop, replaced by `Fab` +
@@ -22,16 +39,30 @@ import { useComposerForm } from './useComposerForm'
  * why they are separate composable parts rather than one component
  * switching on a layout flag.
  */
-export function Composer() {
+export function Composer({ ref }: ComposerProps = {}) {
   const { addTask, isAtLimit } = useTaskStore()
   const form = useComposerForm({ addTask, isAtLimit })
   const [sheetOpen, setSheetOpen] = useState(false)
   const fabRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const isDesktop = useMediaQuery('(min-width: 640px)')
   const errorId = useId()
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      requestNewTask: () => {
+        if (isDesktop) panelRef.current?.querySelector('textarea')?.focus()
+        else setSheetOpen(true)
+      },
+    }),
+    [isDesktop],
+  )
 
   return (
     <>
       <div
+        ref={panelRef}
         className={cn(
           'composer hidden rounded-(--radius-xl) border bg-surface-1 p-(--space-5) transition-shadow duration-(--duration-fast) ease-standard sm:block',
           form.error ? 'border-danger' : 'border-transparent',
