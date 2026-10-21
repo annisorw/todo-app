@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LiveRegion } from '../components/LiveRegion'
 import { TASKS_STORAGE_KEY, readCorruptedBackup } from '../storage/taskStorage'
 import { PERSIST_DEBOUNCE_MS } from '../storage/useDebouncedPersist'
 import { makeTask } from '../test/factories'
@@ -64,6 +65,7 @@ function Probe() {
 function renderStore() {
   return render(
     <TaskStoreProvider>
+      <LiveRegion />
       <Probe />
     </TaskStoreProvider>,
   )
@@ -321,6 +323,22 @@ describe('TaskStoreProvider', () => {
     await user.click(screen.getByRole('button', { name: 'undo' }))
 
     expect(titles()).toEqual(['Первая', 'Вторая'])
+  })
+
+  // FELA-131: `restoreRemoved` announces centrally so an undo toast and a
+  // future `Ctrl/Cmd+Z` shortcut (both just call this one action) never
+  // announce the same restore twice.
+  it('announces the restored task through the LiveRegion', async () => {
+    stub = stubLocalStorage({
+      items: storedItems(storedPayload([makeTask({ id: 'a', title: 'Первая' })])),
+    })
+    const user = userEvent.setup()
+
+    renderStore()
+    await user.click(screen.getByRole('button', { name: 'remove first' }))
+    await user.click(screen.getByRole('button', { name: 'undo' }))
+
+    expect(screen.getByRole('status')).toHaveTextContent('Задача восстановлена: «Первая»')
   })
 
   it('refuses to work outside the provider instead of failing quietly', () => {

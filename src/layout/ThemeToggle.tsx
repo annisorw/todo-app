@@ -40,6 +40,13 @@ export function ThemeToggle() {
     announce(next === 'dark' ? 'Тема: тёмная' : 'Тема: светлая')
   }
 
-  return <IconButton icon={theme === 'dark' ? <MoonIcon /> : <SunIcon />} aria-label={label} onClick={handleClick} />
+  return (
+    <IconButton
+      icon={theme === 'dark' ? <MoonIcon /> : <SunIcon />}
+      aria-label={label}
+      title={label}
+      onClick={handleClick}
+    />
+  )
 
 }

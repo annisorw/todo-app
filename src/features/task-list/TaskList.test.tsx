@@ -17,19 +17,47 @@ function seed(tasks: Task[]) {
   localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify({ version: TASKS_SCHEMA_VERSION, tasks }))
 }
 
-function Harness({ filter = 'all', query = '' }: { filter?: Filter; query?: string }) {
+function Harness({
+  filter = 'all',
+  query = '',
+  onClearSearch = vi.fn(),
+  onSearchAll = vi.fn(),
+}: {
+  filter?: Filter
+  query?: string
+  onClearSearch?: () => void
+  onSearchAll?: () => void
+}) {
   const { tasks } = useTaskStore()
   const view = selectTaskView(tasks, { filter, query })
-  return <TaskList view={view} query={query} filter={filter} panelId="panel" activeTabId="tab-all" />
+  return (
+    <TaskList
+      view={view}
+      query={query}
+      filter={filter}
+      panelId="panel"
+      activeTabId="tab-all"
+      onClearSearch={onClearSearch}
+      onSearchAll={onSearchAll}
+    />
+  )
 }
 
-function renderTaskList(tasks: Task[], options?: { filter?: Filter; query?: string }) {
+function renderTaskList(
+  tasks: Task[],
+  options?: { filter?: Filter; query?: string; onClearSearch?: () => void; onSearchAll?: () => void },
+) {
   seed(tasks)
   return render(
     <TaskStoreProvider>
       <ToastProvider>
         <LiveRegion />
-        <Harness filter={options?.filter} query={options?.query} />
+        <Harness
+          filter={options?.filter}
+          query={options?.query}
+          onClearSearch={options?.onClearSearch}
+          onSearchAll={options?.onSearchAll}
+        />
       </ToastProvider>
     </TaskStoreProvider>,
   )
@@ -111,6 +139,160 @@ describe('TaskList', () => {
     })
   })
 
+  describe('task-settle keeps the original slot (FELA-126 audit)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      stubMatchMedia(true)
+    })
+
+    // Scoped to the active `<ul>` — `getAllByRole('listitem')` unscoped
+    // would also pick up `CompletedSection`'s own `<li>`s, and a row mid
+    // `task-delete`/`task-settle` exit animation can still linger in jsdom
+    // (no real rAF under fake timers), so a plain document-wide query can't
+    // tell "moved to Completed" apart from "still active".
+    function activeTitles() {
+      const activeList = document.querySelector<HTMLElement>('ul[aria-label="Задачи"]')
+      if (activeList === null) return []
+      return within(activeList)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent ?? '')
+    }
+
+    it('checking the first of four active tasks keeps it at index 0 until settle, then moves it to Completed', () => {
+      renderTaskList([
+        makeTask({ id: 't1', title: 'Первая' }),
+        makeTask({ id: 't2', title: 'Вторая' }),
+        makeTask({ id: 't3', title: 'Третья' }),
+        makeTask({ id: 't4', title: 'Четвёртая' }),
+      ])
+
+      fireEvent.click(screen.getAllByRole('checkbox')[0]!)
+
+      // Immediately after the check: still slot 0, DOM is A,B,C,D — not
+      // B,C,D,A (the audited regression).
+      let titles = activeTitles()
+      expect(titles[0]).toContain('Первая')
+      expect(titles[1]).toContain('Вторая')
+
+      act(() => {
+        vi.advanceTimersByTime(599)
+      })
+      titles = activeTitles()
+      expect(titles[0]).toContain('Первая')
+      expect(screen.queryByRole('heading', { name: 'Выполнено' })).not.toBeInTheDocument()
+
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      // Assert via the Completed section specifically, not the whole
+      // document: the exiting active-list copy can still linger in jsdom
+      // mid animation (no real rAF under fake timers), same as the
+      // existing "checking a task off" test above.
+      const completedSection = document.querySelector('section[aria-label="Выполнено"]')
+      expect(completedSection?.textContent).toContain('Первая')
+    })
+
+    it('checking a middle row of four leaves its neighbours in place until settle', () => {
+      renderTaskList([
+        makeTask({ id: 't1', title: 'Первая' }),
+        makeTask({ id: 't2', title: 'Вторая' }),
+        makeTask({ id: 't3', title: 'Третья' }),
+        makeTask({ id: 't4', title: 'Четвёртая' }),
+      ])
+
+      fireEvent.click(screen.getAllByRole('checkbox')[1]!) // "Вторая"
+
+      const titles = activeTitles()
+      expect(titles[0]).toContain('Первая')
+      expect(titles[1]).toContain('Вторая')
+      expect(titles[2]).toContain('Третья')
+      expect(titles[3]).toContain('Четвёртая')
+    })
+
+    it('switching the filter during the delay drops the stale snapshot instead of hiding the task', () => {
+      seed([
+        makeTask({ id: 't1', title: 'Первая' }),
+        makeTask({ id: 't2', title: 'Вторая', completedAt: '2026-10-20T10:00:00.000Z' }),
+      ])
+
+      const { rerender } = render(
+        <TaskStoreProvider>
+          <ToastProvider>
+            <LiveRegion />
+            <Harness filter="active" />
+          </ToastProvider>
+        </TaskStoreProvider>,
+      )
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Первая' }))
+      expect(screen.getByText('Первая')).toBeInTheDocument()
+
+      // The board switches to "Готовые" before the 600ms settle fires. The
+      // settling snapshot was taken under `filter: 'active'`, so it must
+      // not leak into this new view in either direction: not shown as a
+      // stray active row, and not hidden from Completed (the audited bug —
+      // the old code excluded it from Completed purely because it was
+      // still "in settling", regardless of which filter that settling
+      // snapshot belonged to).
+      rerender(
+        <TaskStoreProvider>
+          <ToastProvider>
+            <LiveRegion />
+            <Harness filter="completed" />
+          </ToastProvider>
+        </TaskStoreProvider>,
+      )
+
+      // The real point of this test: Completed must show it, not that the
+      // active `<ul>` is literally absent — framer-motion's exit animation
+      // can leave a dying node mounted under fake timers (no real rAF in
+      // jsdom), independent of this component's own display logic.
+      const completedSection = document.querySelector('section[aria-label="Выполнено"]')
+      expect(completedSection?.textContent).toContain('Первая')
+      expect(completedSection?.textContent).toContain('Вторая')
+
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      expect(document.querySelector('section[aria-label="Выполнено"]')?.textContent).toContain('Первая')
+    })
+
+    it('deleting a task during the delay removes it from the store immediately, with no trace in Completed', () => {
+      // Store-level check rather than a DOM-text query: a row mid exit
+      // animation can still linger in jsdom under fake timers (see
+      // `activeTitles`' comment above), which would make a plain
+      // `queryByText` assertion flaky independent of this logic.
+      function Probe() {
+        const { tasks } = useTaskStore()
+        return <span data-testid="store-task-ids">{tasks.map((task) => task.id).join(',')}</span>
+      }
+
+      seed([makeTask({ id: 't1', title: 'Первая' }), makeTask({ id: 't2', title: 'Вторая' })])
+      render(
+        <TaskStoreProvider>
+          <ToastProvider>
+            <LiveRegion />
+            <Harness />
+            <Probe />
+          </ToastProvider>
+        </TaskStoreProvider>,
+      )
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Первая' }))
+
+      const row = screen.getByText('Первая').closest('li')!
+      fireEvent.click(within(row).getByRole('button', { name: /Действия с задачей/ }))
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Удалить' }))
+
+      expect(screen.getByTestId('store-task-ids')).toHaveTextContent('t2')
+
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      expect(document.querySelector('section[aria-label="Выполнено"]')?.textContent ?? '').not.toContain('Первая')
+    })
+  })
+
   describe('editing all three fields (acceptance criteria 5, 29, 32)', () => {
     beforeEach(() => {
       stubMatchMedia(true)
@@ -141,6 +323,8 @@ describe('TaskList', () => {
       // interactive chip's role instead.
       expect(screen.getByRole('button', { name: /Высокий/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Завтра/ })).toBeInTheDocument()
+      // FELA-131: a successful save showed an empty LiveRegion before this fix.
+      expect(screen.getByRole('status')).toHaveTextContent('Изменения сохранены: «Купить хлеб»')
     })
 
     it('rolls back all three fields on Отмена, leaving the task untouched', async () => {
@@ -159,6 +343,8 @@ describe('TaskList', () => {
       expect(screen.queryByText('другой текст')).not.toBeInTheDocument()
       expect(screen.getByText('Купить молоко')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Низкий/ })).toBeInTheDocument()
+      // FELA-131: cancelling an edit was never announced before this fix.
+      expect(screen.getByRole('status')).toHaveTextContent('Правка отменена')
     })
 
     it('a click outside the editor saves instead of cancelling (Postel’s Law)', async () => {
@@ -186,6 +372,8 @@ describe('TaskList', () => {
       await user.type(textarea, '{Enter}')
 
       expect(screen.getByText('Купить молоко')).toBeInTheDocument()
+      // FELA-131: routed through the same cancel path, so it gets the same announcement.
+      expect(screen.getByRole('status')).toHaveTextContent('Правка отменена')
     })
 
     it('two-level Esc: the first closes the priority popover, the second closes the editor and returns focus to the row', async () => {
@@ -421,6 +609,30 @@ describe('TaskList', () => {
       expect(screen.getByText('Готовая')).toBeInTheDocument()
     })
 
+    it.each([
+      [1, 'Удалить все выполненные (1)?', 'Удалить 1 задачу'],
+      [2, 'Удалить все выполненные (2)?', 'Удалить 2 задачи'],
+      [5, 'Удалить все выполненные (5)?', 'Удалить 5 задач'],
+      [11, 'Удалить все выполненные (11)?', 'Удалить 11 задач'],
+      [21, 'Удалить все выполненные (21)?', 'Удалить 21 задачу'],
+    ])('pluralises the dialog title and confirm label for %i completed tasks', async (count, title, confirmLabel) => {
+      const user = userEvent.setup()
+      const completed = Array.from({ length: count }, (_, index) =>
+        makeTask({
+          id: `completed-${String(index + 1)}`,
+          title: `Готовая ${String(index + 1)}`,
+          completedAt: `2026-10-20T10:${String(index).padStart(2, '0')}:00.000Z`,
+        }),
+      )
+      renderTaskList(completed)
+
+      await user.click(screen.getByRole('button', { name: 'Удалить все выполненные' }))
+
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveTextContent(title)
+      expect(screen.getByRole('button', { name: confirmLabel })).toBeInTheDocument()
+    })
+
     it('under an active search filter, names and clears every completed task, not just the visible ones', async () => {
       // TechLead review on PR #47: with a query active, the dialog quoted
       // the filtered count (1) and the button said "Удалить 1 задачу", but
@@ -565,6 +777,44 @@ describe('TaskList', () => {
       await user.click(within(alerts[1]!).getByRole('button', { name: 'Вернуть' }))
       expect(screen.getByText('Вторая')).toBeInTheDocument()
     })
+
+    // FELA-168: the toast's `onAction` binds `restoreRemoved` once, at push
+    // time (`lastRemovedRef` in `TaskList`) — unlike the `Probe` harness in
+    // `TaskStoreProvider.test.tsx`, which reads a fresh `restoreRemoved` on
+    // every render and so can't reproduce the stale-closure bug this guards.
+    it('announces the restored task through the LiveRegion on the real undo path', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Первая' })])
+
+      await user.click(screen.getByRole('button', { name: /Действия с задачей/ }))
+      await user.click(screen.getByRole('menuitem', { name: 'Удалить' }))
+      await user.click(screen.getByRole('button', { name: 'Вернуть' }))
+
+      expect(screen.getByRole('status')).toHaveTextContent('Задача восстановлена: «Первая»')
+    })
+
+    it('names the task actually restored, not the first one, after two deletes in a row', async () => {
+      const user = userEvent.setup()
+      renderTaskList([
+        makeTask({ id: 't1', title: 'Первая' }),
+        makeTask({ id: 't2', title: 'Вторая' }),
+      ])
+
+      async function deleteRowNamed(title: string) {
+        const row = screen.getByText(title).closest('li')
+        if (row === null) throw new Error(`row for "${title}" not found`)
+        await user.click(within(row).getByRole('button', { name: /Действия с задачей/ }))
+        await user.click(screen.getByRole('menuitem', { name: 'Удалить' }))
+      }
+
+      await deleteRowNamed('Первая')
+      await deleteRowNamed('Вторая')
+
+      const alerts = screen.getAllByRole('alert')
+      await user.click(within(alerts[1]!).getByRole('button', { name: 'Вернуть' }))
+
+      expect(screen.getByRole('status')).toHaveTextContent('Задача восстановлена: «Вторая»')
+    })
   })
 
   describe('prefers-reduced-motion (motion table, section 5 / acceptance criterion 17)', () => {
@@ -585,6 +835,21 @@ describe('TaskList', () => {
       )
     }
 
+    /**
+     * The wrapper directly inside the row that carries `task-add`'s
+     * translateY and `task-delete`'s translateX.
+     *
+     * The `<li>` itself can't: active rows are `Reorder.Item`s, which always
+     * register their own `x`/`y` for the drag offset and so always write a
+     * `transform`, whatever the motion preference says. The slide moved one
+     * level in for exactly that reason (`TaskRow`), and on this element
+     * "did framer register a transform-affecting value at all?" is still
+     * the question criterion 17 asks.
+     */
+    function slideStyle(row: HTMLElement | null): string {
+      return row?.firstElementChild?.getAttribute('style') ?? ''
+    }
+
     it('task-add drops the y-translate motion value, keeping only opacity', () => {
       stubReducedMotion(true)
       renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
@@ -592,9 +857,11 @@ describe('TaskList', () => {
       const row = screen.getByText('Купить молоко').closest('li')
       // Framer Motion only ever writes a `transform` style when a
       // transform-affecting value (here, `y`) is part of `initial`/
-      // `animate` — under reduced motion `TaskRow` passes `{ opacity }`
-      // alone, so the property never appears at all, not even as `none`.
-      expect(row?.getAttribute('style')).not.toContain('transform')
+      // `animate` — under reduced motion `TaskRow` passes neither, so the
+      // property never appears at all, not even as `none`.
+      expect(slideStyle(row)).not.toContain('transform')
+      // And the row element's own transform stays inert.
+      expect(row?.style.transform).toBe('none')
     })
 
     it('task-add keeps the y-translate motion value when motion is not reduced', () => {
@@ -602,7 +869,7 @@ describe('TaskList', () => {
       renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
 
       const row = screen.getByText('Купить молоко').closest('li')
-      expect(row?.getAttribute('style')).toContain('transform')
+      expect(slideStyle(row)).toContain('transform')
     })
 
     it('task-delete drops the x-translate/height motion values under reduced motion', async () => {
@@ -614,15 +881,155 @@ describe('TaskList', () => {
       await user.click(screen.getByRole('button', { name: /Действия с задачей/ }))
       await user.click(screen.getByRole('menuitem', { name: 'Удалить' }))
 
-      expect(row?.getAttribute('style')).not.toContain('transform')
+      expect(slideStyle(row)).not.toContain('transform')
+      expect(row?.style.transform).toBe('none')
       expect(row?.getAttribute('style')).not.toContain('height')
     })
   })
 
   describe('empty states', () => {
-    it('shows a message when there are no tasks at all', () => {
-      renderTaskList([])
-      expect(screen.getByText('Пока нет активных задач.')).toBeInTheDocument()
+    it('shows EmptyState no-active when the active filter has zero tasks (design-spec S5)', () => {
+      renderTaskList(
+        [makeTask({ id: 't1', title: 'Готово', completedAt: '2026-01-01T00:00:00.000Z' })],
+        { filter: 'active' },
+      )
+      expect(screen.getByText('Все активные задачи выполнены')).toBeInTheDocument()
+    })
+
+    it('shows EmptyState no-completed when the completed filter has zero tasks', () => {
+      renderTaskList([makeTask({ id: 't1', title: 'Активная' })], { filter: 'completed' })
+      expect(screen.getByText('Пока нет выполненных задач')).toBeInTheDocument()
+    })
+
+    it('shows EmptyState no-search-results with the query, and resets the filter via "Искать во всех"', async () => {
+      const user = userEvent.setup()
+      const onSearchAll = vi.fn()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })], {
+        filter: 'active',
+        query: 'контракт',
+        onSearchAll,
+      })
+
+      expect(screen.getByText('По запросу «контракт» нет задач')).toBeInTheDocument()
+      expect(screen.getByText('Проверьте раскладку или сбросьте фильтр «Активные».')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Искать во всех' }))
+      expect(onSearchAll).toHaveBeenCalledOnce()
+    })
+
+    it('hides "Искать во всех" and clears the search via "Очистить поиск" when the filter is already "Все"', async () => {
+      const user = userEvent.setup()
+      const onClearSearch = vi.fn()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })], {
+        filter: 'all',
+        query: 'контракт',
+        onClearSearch,
+      })
+
+      expect(screen.queryByRole('button', { name: 'Искать во всех' })).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Очистить поиск' }))
+      expect(onClearSearch).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe('mobile row menu button (FELA-120, design-spec 3.11/3.15/6.2)', () => {
+    beforeEach(() => {
+      stubMatchMedia(false)
+    })
+
+    it('opens the row Menu from a tap on the persistent "more" button, with no swipe or long press', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ })
+      await user.click(moreButton)
+
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: 'Изменить' })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: 'Удалить' })).toBeInTheDocument()
+    })
+
+    it('meets the 44×44 mobile touch target (design-spec 3.6) and names the task in the accessible name', () => {
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ })
+      expect(moreButton.className).toContain('size-11')
+    })
+
+    it('reaches "Удалить" via a tap on the button, with no gesture involved', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      await user.click(screen.getByRole('button', { name: /Действия с задачей/ }))
+      await user.click(screen.getByRole('menuitem', { name: 'Удалить' }))
+
+      expect(screen.queryByText('Купить молоко')).not.toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent('Задача удалена: «Купить молоко»')
+    })
+
+    it('Esc closes the menu and returns focus to the "more" button that opened it', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей/ })
+      await user.click(moreButton)
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+
+      await user.keyboard('{Escape}')
+
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+      expect(moreButton).toHaveFocus()
+    })
+
+    it('keeps the long-press/swipe gesture working, and returns focus to the checkbox on Esc when the gesture opened it', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const row = screen.getByText('Купить молоко').closest('.task-row')
+      if (row === null) throw new Error('row not found')
+
+      fireEvent.touchStart(row, { touches: [{ clientX: 200, clientY: 50 }] })
+      fireEvent.touchEnd(row, { changedTouches: [{ clientX: 100, clientY: 50 }] })
+
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+
+      await user.keyboard('{Escape}')
+
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+      expect(screen.getByRole('checkbox')).toHaveFocus()
+    })
+
+    it('does not arm the long-press gesture when press-and-hold happens on the "more" button itself (FELA-167 regression)', () => {
+      vi.useFakeTimers()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ })
+
+      fireEvent.touchStart(moreButton, { touches: [{ clientX: 350, clientY: 50 }] })
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      fireEvent.touchEnd(moreButton, { changedTouches: [{ clientX: 350, clientY: 50 }] })
+      fireEvent.click(moreButton)
+
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+    })
+
+    it('still opens the menu on a long press over the row body, outside the "more" button (FELA-167 regression)', () => {
+      vi.useFakeTimers()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const row = screen.getByText('Купить молоко').closest('.task-row')
+      if (row === null) throw new Error('row not found')
+
+      fireEvent.touchStart(row, { touches: [{ clientX: 200, clientY: 50 }] })
+      act(() => {
+        vi.advanceTimersByTime(600)
+      })
+      fireEvent.touchEnd(row, { changedTouches: [{ clientX: 200, clientY: 50 }] })
+
+      expect(screen.getByRole('menu')).toBeInTheDocument()
     })
   })
 })
