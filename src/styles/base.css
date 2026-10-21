@@ -38,6 +38,31 @@
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
   }
+
+  /* Search hit (spec 3.11, state `search-hit`). Without this the UA paints
+   * `<mark>` pure yellow on black — the one non-token colour on the screen.
+   *
+   * An element selector, not a utility: `<mark>` comes out of `highlight()`
+   * (src/lib/highlight.tsx), so nobody writes this markup by hand and there is
+   * no className to hang a utility on. It lives in `@layer base` because it is
+   * a document default: anything targeting `mark` by class later — including a
+   * Tailwind utility — should win without `!important`.
+   *
+   * `color` is pinned rather than inherited on purpose. On a completed task the
+   * title is --color-text-tertiary (spec 3.11 `completed`), and tertiary over
+   * this backing measures 3.36:1 in dark — below the 4.5:1 floor. The
+   * strikethrough is still drawn by the <p>, in the <p>'s colour, so the row
+   * keeps reading as completed.
+   *
+   * No vertical padding and no font-weight change: both would reflow the title
+   * on every keystroke, since the highlight is recomputed per input event.
+   * `padding-inline` only keeps the backing off the neighbouring glyphs. */
+  mark {
+    background-color: var(--color-search-hit-bg);
+    color: var(--color-text-primary);
+    border-radius: var(--radius-xs);
+    padding-inline: 1px;
+  }
 }
 
 /* ---- Mandatory fallback when backdrop-filter is unsupported (spec 2.7) ----- */
