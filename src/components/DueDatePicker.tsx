@@ -15,6 +15,15 @@ export interface DueDatePickerProps {
   className?: string
   /** Forwarded to the trigger chip — the desktop row quick-path uses this for roving tabindex. */
   tabIndex?: number
+  /**
+   * Which edge the panel hangs from. `'start'` (default) covers every
+   * caller where the chip sits away from the viewport's right edge
+   * (`Composer`, the desktop `TaskRow` quick-path). `'end'` is for
+   * `TaskEditorSheet`, where the chip is the lone right-aligned child of a
+   * `justify-between` row (design-spec 3.11a) — a left-anchored 224px panel
+   * there runs off a 390px screen (FELA-124).
+   */
+  align?: 'start' | 'end'
 }
 
 interface Preset {
@@ -52,6 +61,7 @@ interface DatePanelProps {
   onCommit: (value: string | null) => void
   onClose: () => void
   prefersReducedMotion: boolean
+  align: 'start' | 'end'
 }
 
 /**
@@ -67,7 +77,7 @@ interface DatePanelProps {
  * instead of escaping to whatever follows the trigger chip in the host's tab
  * order (e.g. the priority chip, when this opens inside `TaskEditor`).
  */
-function DatePanel({ id, value, today, anchorRef, onCommit, onClose, prefersReducedMotion }: DatePanelProps) {
+function DatePanel({ id, value, today, anchorRef, onCommit, onClose, prefersReducedMotion, align }: DatePanelProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const presetRefs = useRef<Array<HTMLButtonElement | null>>([])
@@ -108,14 +118,17 @@ function DatePanel({ id, value, today, anchorRef, onCommit, onClose, prefersRedu
       initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
-      className="absolute top-full left-0 z-(--z-dropdown) mt-(--space-2) flex w-56 origin-top-left flex-col gap-(--space-3) rounded-(--radius-md) border border-surface-border bg-surface-2 p-(--space-3) shadow-md"
+      className={cn(
+        'absolute top-full z-(--z-dropdown) mt-(--space-2) flex w-56 flex-col gap-(--space-3) rounded-(--radius-md) border border-surface-border bg-surface-2 p-(--space-3) shadow-md',
+        align === 'end' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
+      )}
     >
       <input
         ref={inputRef}
         type="date"
         value={value ?? ''}
         onChange={handleNativeChange}
-        className="h-10 rounded-(--radius-sm) border border-surface-border-strong bg-surface-1 px-(--space-2) text-body text-primary"
+        className="h-11 rounded-(--radius-sm) border border-surface-border-strong bg-surface-1 px-(--space-2) text-body text-primary sm:h-10"
       />
       <div className="flex flex-col gap-(--space-1)">
         {PRESETS.map((preset, index) => (
@@ -127,7 +140,7 @@ function DatePanel({ id, value, today, anchorRef, onCommit, onClose, prefersRedu
             }}
             onClick={() => handlePreset(preset)}
             className={cn(
-              'rounded-(--radius-sm) px-(--space-3) py-(--space-2) text-left text-label transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-hover',
+              'flex min-h-11 items-center rounded-(--radius-sm) px-(--space-3) py-(--space-2) text-left text-label transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-hover sm:min-h-0',
               preset.key === 'clear' ? 'text-danger' : 'text-primary',
             )}
           >
@@ -144,7 +157,7 @@ function DatePanel({ id, value, today, anchorRef, onCommit, onClose, prefersRedu
  * Same `value`/`onChange` contract as `PrioritySelect`: `Composer`,
  * `TaskEditor` and the desktop row quick-path share one implementation.
  */
-export function DueDatePicker({ value, onChange, className, tabIndex }: DueDatePickerProps) {
+export function DueDatePicker({ value, onChange, className, tabIndex, align = 'start' }: DueDatePickerProps) {
   const [open, setOpen] = useState(false)
   const [today] = useState(() => new Date())
   const anchorRef = useRef<HTMLButtonElement>(null)
@@ -181,6 +194,7 @@ export function DueDatePicker({ value, onChange, className, tabIndex }: DueDateP
           onCommit={handleCommit}
           onClose={() => setOpen(false)}
           prefersReducedMotion={prefersReducedMotion}
+          align={align}
         />
       )}
     </div>

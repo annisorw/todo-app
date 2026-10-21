@@ -100,7 +100,7 @@ export function Menu({ id, items, anchorRef, onClose, className }: MenuProps) {
             onClose()
           }}
           className={cn(
-            'flex items-center gap-(--space-2) rounded-(--radius-sm) px-(--space-3) py-(--space-2) text-left text-label transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-hover',
+            'flex min-h-11 items-center gap-(--space-2) rounded-(--radius-sm) px-(--space-3) py-(--space-2) text-left text-label transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-hover sm:min-h-0',
             item.variant === 'danger' ? 'text-danger' : 'text-primary',
           )}
         >
