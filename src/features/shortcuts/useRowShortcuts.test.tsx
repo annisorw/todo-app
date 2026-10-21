@@ -120,6 +120,60 @@ describe('useRowShortcuts', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Задача удалена: «Задача 2»')
     })
 
+    // The list is a single Tab stop (design-spec section 7), so focus left on
+    // `<body>` after a delete means the only way back into the list is Tab
+    // from the header — acceptance criterion 22 asks for the whole flow
+    // («удалить → вернуть») from the keyboard, not for a restart halfway.
+    it('hands focus to the row below before the deleted row unmounts', () => {
+      renderList(makeTasks(3))
+      const row = anchor('Задача 1')
+      row.focus()
+
+      fireEvent.keyDown(row, { key: 'Delete', code: 'Delete' })
+
+      expect(document.activeElement).toBe(anchor('Задача 2'))
+    })
+
+    it('falls back to the row above when the last row is deleted', () => {
+      renderList(makeTasks(3))
+      const row = anchor('Задача 3')
+      row.focus()
+
+      fireEvent.keyDown(row, { key: 'Delete', code: 'Delete' })
+
+      expect(document.activeElement).toBe(anchor('Задача 2'))
+    })
+
+    it('still deletes the only row, with no neighbour to move to', () => {
+      renderList(makeTasks(1))
+      const row = anchor('Задача 1')
+      row.focus()
+
+      fireEvent.keyDown(row, { key: 'Delete', code: 'Delete' })
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Задача удалена: «Задача 1»')
+    })
+
+    it('hands focus within «Выполнено», not across into the active list', () => {
+      // Two completed rows below two active ones: the sections are separate
+      // roving groups, so the hand-off must stay inside the group that owns
+      // the deleted row.
+      // «Выполнено» is newest-completed first, so the later timestamp on
+      // «Задача 3» is what puts «Задача 4» directly below it — a tie would
+      // leave the expected neighbour up to sort stability.
+      const completedAt = ['2026-10-20T12:00:00.000Z', '2026-10-20T10:00:00.000Z']
+      const tasks = makeTasks(4).map((task, index) =>
+        index >= 2 ? { ...task, completedAt: completedAt[index - 2] ?? null } : task,
+      )
+      renderList(tasks)
+      const row = anchor('Задача 3')
+      row.focus()
+
+      fireEvent.keyDown(row, { key: 'Delete', code: 'Delete' })
+
+      expect(document.activeElement).toBe(anchor('Задача 4'))
+    })
+
     it('does not delete while the caret is in the editor — Backspace has to edit text', () => {
       renderList(makeTasks(1))
       fireEvent.keyDown(anchor('Задача 1'), { key: 'e', code: 'KeyE' })

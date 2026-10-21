@@ -12,6 +12,15 @@ export interface RovingFocus {
   handleFocus: (id: string) => void
   /** ↑/↓ on a row's checkbox moves both the active id and the real DOM focus to the neighbour. */
   handleKeyDown: (event: KeyboardEvent, id: string) => void
+  /**
+   * Moves focus off a row that is about to leave this group (keyboard delete)
+   * onto the row below it, or the one above when it was the last. Call it
+   * *before* the removal dispatches, while the neighbour is still mounted.
+   *
+   * A no-op when the row has no surviving neighbour — the group is about to
+   * be empty, and there is nothing in it left to focus.
+   */
+  focusNeighbourOf: (id: string) => void
 }
 
 /**
@@ -50,6 +59,27 @@ export function useRovingFocus(ids: string[]): RovingFocus {
     setActiveId(id)
   }, [])
 
+  // The one way focus is moved inside this group: the active id and the real
+  // DOM focus always travel together, so ↑/↓ and the delete hand-off cannot
+  // drift into "the Tab stop says one row, the caret sits on another".
+  const focusRow = useCallback((id: string) => {
+    setActiveId(id)
+    nodes.current.get(id)?.focus()
+  }, [])
+
+  const focusNeighbourOf = useCallback(
+    (id: string) => {
+      const index = ids.indexOf(id)
+      if (index === -1) return
+
+      const next = ids[index + 1] ?? ids[index - 1]
+      if (next === undefined) return
+
+      focusRow(next)
+    },
+    [ids, focusRow],
+  )
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent, id: string) => {
       if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
@@ -67,11 +97,17 @@ export function useRovingFocus(ids: string[]): RovingFocus {
       const nextId = ids[nextIndex]
       if (nextId === undefined) return
 
-      setActiveId(nextId)
-      nodes.current.get(nextId)?.focus()
+      focusRow(nextId)
     },
-    [ids],
+    [ids, focusRow],
   )
 
-  return { activeId: effectiveActiveId, getTabIndex, registerRef, handleFocus, handleKeyDown }
+  return {
+    activeId: effectiveActiveId,
+    getTabIndex,
+    registerRef,
+    handleFocus,
+    handleKeyDown,
+    focusNeighbourOf,
+  }
 }

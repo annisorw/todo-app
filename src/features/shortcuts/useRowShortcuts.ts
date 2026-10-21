@@ -12,7 +12,20 @@ export interface RowShortcutActions {
   moveTask: (taskId: string, delta: -1 | 1) => void
 }
 
-export type RowKeyDownHandler = (event: KeyboardEvent<Element>, taskId: string) => void
+/**
+ * `focusNeighbour` moves focus onto a surviving row of the *same* roving
+ * group before `Delete` unmounts the focused one. It is a required argument
+ * rather than part of `RowShortcutActions` because the two row groups — the
+ * active list and «Выполнено» — are separate roving groups with separate
+ * `useRovingFocus` instances, and only the group rendering the row knows
+ * where its focus should land next. Making it required means a new row group
+ * cannot quietly forget it and drop the user back on `<body>`.
+ */
+export type RowKeyDownHandler = (
+  event: KeyboardEvent<Element>,
+  taskId: string,
+  focusNeighbour: () => void,
+) => void
 
 /**
  * The row-scoped half of design-spec 6.3 — the keys that are meaningless
@@ -40,7 +53,7 @@ export function useRowShortcuts(actions: RowShortcutActions): RowKeyDownHandler 
 
   // A stable handler: `TaskRow` takes it as a prop, and a new identity on
   // every keystroke would re-render every row in the list.
-  return useCallback((event: KeyboardEvent<Element>, taskId: string) => {
+  return useCallback((event: KeyboardEvent<Element>, taskId: string, focusNeighbour: () => void) => {
     if (event.defaultPrevented) return
     if (isDismissableOpen()) return
     if (isTextEntry(event.target)) return
@@ -58,6 +71,12 @@ export function useRowShortcuts(actions: RowShortcutActions): RowKeyDownHandler 
 
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault()
+      // Order matters: hand focus to the neighbour *first*, while this row is
+      // still mounted. Removal unmounts the focused node (after its exit
+      // animation), and focus would otherwise fall back to `<body>`, making
+      // the keyboard user restart the Tab sequence from the header — the list
+      // is one Tab stop, so there is no way back to the row they were at.
+      focusNeighbour()
       latest.current.removeTask(taskId)
       return
     }

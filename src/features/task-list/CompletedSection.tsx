@@ -100,7 +100,9 @@ export function CompletedSection({
               registerRef={(node) => roving.registerRef(task.id, node)}
               onFocus={() => roving.handleFocus(task.id)}
               onKeyDown={(event) => roving.handleKeyDown(event, task.id)}
-              onRowKeyDown={(event) => onRowKeyDown(event, task.id)}
+              onRowKeyDown={(event) =>
+                onRowKeyDown(event, task.id, () => roving.focusNeighbourOf(task.id))
+              }
               onToggle={() => onToggle(task.id)}
               onOpenEditor={() => onOpenEditor(task.id)}
               onCloseEditor={onCloseEditor}

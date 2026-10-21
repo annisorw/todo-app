@@ -218,7 +218,9 @@ export function TaskList({
                 registerRef={(node) => roving.registerRef(task.id, node)}
                 onFocus={() => roving.handleFocus(task.id)}
                 onKeyDown={(event) => roving.handleKeyDown(event, task.id)}
-                onRowKeyDown={(event) => handleRowKeyDown(event, task.id)}
+                onRowKeyDown={(event) =>
+                  handleRowKeyDown(event, task.id, () => roving.focusNeighbourOf(task.id))
+                }
                 onToggle={() => handleToggle(task)}
                 onOpenEditor={() => setEditingId(task.id)}
                 onCloseEditor={() => setEditingId(null)}

@@ -194,6 +194,36 @@ describe('keyboard flow (design-spec 6.3 / section 7)', () => {
       expect(screen.getByRole('dialog', { name: 'Горячие клавиши' })).toBeInTheDocument()
     })
 
+    /**
+     * The open sheet must not let keys through to the row behind it. Two
+     * independent mechanisms have to hold for that, so both are asserted:
+     * `ShortcutsSheet` focuses its own close button on mount (the key never
+     * reaches the row's handler), and it registers on the dismiss stack, so
+     * `isDismissableOpen()` gates the shortcuts regardless of where focus is.
+     * The second is what owns `Esc` here — closing the sheet, not clearing
+     * the search.
+     */
+    it('the open shortcuts sheet swallows row keys and owns Esc', async () => {
+      const user = userEvent.setup()
+      renderApp(makeTasks(2))
+
+      await user.keyboard('/')
+      await user.keyboard('Задача')
+      const search = screen.getByRole('searchbox', { name: 'Поиск задач' })
+      screen.getByRole('checkbox', { name: /Задача 1/ }).focus()
+
+      await user.keyboard('?')
+      await user.keyboard('{Delete}')
+
+      expect(screen.getByRole('dialog', { name: 'Горячие клавиши' })).toBeInTheDocument()
+      expect(storeSummary()).toBe('Активных: 2 · Выполнено: 0')
+
+      await user.keyboard('{Escape}')
+
+      expect(screen.queryByRole('dialog', { name: 'Горячие клавиши' })).not.toBeInTheDocument()
+      expect(search).toHaveValue('Задача')
+    })
+
     it('Esc clears the search without leaving the field', async () => {
       const user = userEvent.setup()
       renderApp(makeTasks(2))
