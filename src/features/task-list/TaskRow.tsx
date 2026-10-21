@@ -291,7 +291,15 @@ export function TaskRow({
       layout={!prefersReducedMotion}
       initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
       animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-      exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: 12, height: 0 }}
+      exit={
+        prefersReducedMotion
+          ? { opacity: 0 }
+          // `task-delete` (motion table, section 5): 200ms / --ease-in-fast,
+          // distinct from the 320ms / --ease-out-soft `task-add` enter below —
+          // framer-motion falls back to the component `transition` prop
+          // otherwise, which would give the exit the enter's timing.
+          : { opacity: 0, x: 12, height: 0, transition: { duration: 0.2, ease: [0.4, 0, 1, 1] } }
+      }
       transition={prefersReducedMotion ? { duration: 0.12 } : { duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
       className="relative"
     >
