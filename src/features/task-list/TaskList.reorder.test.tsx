@@ -20,7 +20,19 @@ function seed(tasks: Task[]) {
 function Harness({ filter = 'all', query = '' }: { filter?: Filter; query?: string }) {
   const { tasks } = useTaskStore()
   const view = selectTaskView(tasks, { filter, query })
-  return <TaskList view={view} query={query} filter={filter} panelId="panel" activeTabId="tab-all" />
+  // Reordering always needs rows on screen, so the `EmptyState` actions these
+  // two props feed are unreachable here — stubs keep the types honest.
+  return (
+    <TaskList
+      view={view}
+      query={query}
+      filter={filter}
+      panelId="panel"
+      activeTabId="tab-all"
+      onClearSearch={vi.fn()}
+      onSearchAll={vi.fn()}
+    />
+  )
 }
 
 /** Mounts the list the way the app does — the whole provider stack, reading the seeded storage. */
