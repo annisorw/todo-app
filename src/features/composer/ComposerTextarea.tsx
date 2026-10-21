@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import type { RefObject } from 'react'
 import { MAX_TITLE_LENGTH } from '../../domain/limits'
 import { cn } from '../../lib/cn'
 import type { ComposerFormController } from './useComposerForm'
@@ -8,6 +9,13 @@ export interface ComposerTextareaProps {
   errorId: string
   autoFocus?: boolean
   className?: string
+  /**
+   * Lets the caller hold the field's node — the desktop panel passes its own
+   * ref so the global `N` shortcut can focus it (design-spec 6.3). Omitted,
+   * the component keeps its private one; either way there is exactly one,
+   * because the autosize effect below reads whichever is in play.
+   */
+  fieldRef?: RefObject<HTMLTextAreaElement | null>
 }
 
 /**
@@ -24,15 +32,18 @@ export interface ComposerTextareaProps {
  * See `focusRing.node.test.ts` for the allowlist entry this suppression has
  * to keep satisfying.
  */
-export function ComposerTextarea({ form, errorId, autoFocus, className }: ComposerTextareaProps) {
-  const ref = useRef<HTMLTextAreaElement>(null)
+export function ComposerTextarea({ form, errorId, autoFocus, className, fieldRef }: ComposerTextareaProps) {
+  const ownRef = useRef<HTMLTextAreaElement>(null)
+  const ref = fieldRef ?? ownRef
 
   useEffect(() => {
     const node = ref.current
     if (node === null) return
     node.style.height = 'auto'
     node.style.height = `${String(node.scrollHeight)}px`
-  }, [form.title])
+    // `ref` is one of two stable ref objects, picked once per mount; it is in
+    // the list only because the linter cannot see that.
+  }, [form.title, ref])
 
   return (
     <textarea

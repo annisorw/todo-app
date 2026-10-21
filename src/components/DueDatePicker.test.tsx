@@ -94,6 +94,19 @@ describe('DueDatePicker', () => {
     expect(chip).toHaveFocus()
   })
 
+  it('gives the native date input an accessible name and the panel a dialog name matching the trigger', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    const chip = screen.getByRole('button', { name: 'Срок' })
+    expect(chip).toHaveAttribute('aria-haspopup', 'dialog')
+    await user.click(chip)
+
+    const dialog = screen.getByRole('dialog', { name: 'Выбор срока' })
+    expect(chip).toHaveAttribute('aria-controls', dialog.id)
+    expect(screen.getByLabelText('Дата срока')).toHaveAttribute('type', 'date')
+  })
+
   it('closes on an outside click', async () => {
     const user = userEvent.setup()
     render(
