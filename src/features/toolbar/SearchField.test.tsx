@@ -19,7 +19,7 @@ describe('SearchField', () => {
   it('hides the hint and shows a clear button once there is a value', () => {
     render(<SearchField value="task" onChange={vi.fn()} />)
     expect(screen.queryByText('/')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Очистить поиск' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Очистить поле' })).toBeInTheDocument()
   })
 
   it('calls onChange on every keystroke (debounce is the caller\'s job)', () => {
@@ -36,7 +36,7 @@ describe('SearchField', () => {
     const onChange = vi.fn()
     render(<SearchField value="task" onChange={onChange} />)
 
-    await user.click(screen.getByRole('button', { name: 'Очистить поиск' }))
+    await user.click(screen.getByRole('button', { name: 'Очистить поле' }))
 
     expect(onChange).toHaveBeenCalledWith('')
   })
