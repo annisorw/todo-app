@@ -1,9 +1,12 @@
+import { useState } from 'react'
+import { downloadJson } from '../lib/downloadJson'
 import type { StorageError } from '../storage/localStorageDriver'
-import { isUnreadableError, readCorruptedBackup } from '../storage/taskStorage'
+import { isUnreadableError } from '../storage/taskStorage'
+import { useQuarantineBackup } from '../state/useQuarantineBackup'
 import { useTaskStore } from '../state/useTaskStore'
-import { useToast } from '../state/useToast'
 import { Button } from './Button'
-import { cn } from '../lib/cn'
+import { ConfirmDialog } from './ConfirmDialog'
+import { NoticeBlock } from './NoticeBlock'
 
 export interface ErrorBannerProps {
   className?: string
@@ -15,11 +18,12 @@ interface Copy {
 }
 
 /**
- * Texts for `blocked` are verbatim from design-spec S9. `quota` and
- * `corrupted` aren't given literal copy there (only "scenario exists"), so
- * these two are written in the same voice — plain language, says what
- * happened and what to do, no blame (spec section 7, "Язык и текст"). Flagged
- * to Designer for sign-off in the FELA-18 task comment; not blocking on it.
+ * Texts for `blocked` are verbatim from design-spec S9. `quota` is written in
+ * the same voice (spec section 7, "Язык и текст"). `corrupted` is verbatim
+ * from `design-quarantine-surface` §4A/§9 ([FELA-73](/FELA/issues/FELA-73)),
+ * which fixed the tense ("не удалось", not "не удаётся" — the read failed
+ * once at startup and won't repeat this session) and dropped the "corrupted
+ * and unreadable" repetition plus the "raw bytes" jargon term.
  */
 const COPY: Record<StorageError, Copy> = {
   blocked: {
@@ -31,22 +35,9 @@ const COPY: Record<StorageError, Copy> = {
     body: 'Место в хранилище браузера закончилось. Задачи в этой вкладке продолжают работать, но новые изменения не сохранятся, пока место не освободится.',
   },
   corrupted: {
-    title: 'Не удаётся прочитать сохранённые задачи',
-    body: 'Сохранённые данные повреждены и не читаются. Список сейчас пуст, но исходные байты сохранены — их можно выгрузить и попробовать восстановить вручную.',
+    title: 'Не удалось прочитать сохранённые задачи',
+    body: 'Сохранённые задачи не читаются, поэтому список начат заново. Повреждённая копия осталась в браузере — её можно выгрузить в файл и попробовать восстановить вручную.',
   },
-}
-
-function downloadJson(filename: string, content: string): void {
-  const blob = new Blob([content], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  // Revoking in the same tick as the click can abort the download in Firefox.
-  window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 function WarningIcon() {
@@ -65,12 +56,11 @@ function WarningIcon() {
 }
 
 /**
- * design-spec 3.21 / S9. Reads `storageError` straight from the store — the
- * one deliberate exception to "components/ doesn't know about the store"
- * (architecture doc section 2): the export button needs the live task list,
- * and the corrupted-data export needs the quarantined raw bytes that only
- * `storage/taskStorage.ts` keeps (its own comments point straight at this
- * ticket, [FELA-18](/FELA/issues/FELA-18)).
+ * design-spec 3.21 / S9, delta `design-quarantine-surface` §4A
+ * ([FELA-73](/FELA/issues/FELA-73)). Reads `storageError` straight from the
+ * store — the one deliberate exception to "components/ doesn't know about
+ * the store" (architecture doc section 2): the export button needs the live
+ * task list.
  *
  * "Повторить" really retries: `retryPersist` writes the current list right
  * away and the banner closes only if that write succeeded. For `blocked` the
@@ -84,60 +74,78 @@ function WarningIcon() {
  * bytes. A person reading "Повторить" would lose their own backup by pressing
  * it. There is nothing to retry here, so there is no button; the store refuses
  * the same thing from its side.
+ *
+ * The quarantine export/delete pair is `useQuarantineBackup` — the same hook
+ * `QuarantineNotice` uses, since the surface outlives this banner's session
+ * ([FELA-79](/FELA/issues/FELA-79)). Both its buttons render only while
+ * `backup !== null`: an empty quarantine leaves nothing to export or delete,
+ * so there is no "nothing to export" toast branch here anymore either.
  */
 export function ErrorBanner({ className }: ErrorBannerProps) {
   const { storageError, tasks, retryPersist } = useTaskStore()
-  const { pushToast } = useToast()
+  const { backup, exportToFile, remove } = useQuarantineBackup()
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   if (storageError === null) return null
 
   const copy = COPY[storageError]
   const isUnreadable = isUnreadableError(storageError)
 
-  const handleExport = () => {
-    if (isUnreadable) {
-      const backup = readCorruptedBackup()
-      // No quarantined bytes (or the quarantine read itself failed) means
-      // there is nothing to restore — downloading an empty envelope here
-      // would read as "your data is safe" when it is actually gone.
-      if (!backup.ok || backup.value === null) {
-        pushToast({ variant: 'danger', message: 'Выгружать нечего: повреждённые данные не сохранились.' })
-        return
-      }
-      downloadJson('aurora-tasks-backup.json', backup.value)
-      return
-    }
+  const handleExportInMemory = () => {
     downloadJson('aurora-tasks.json', JSON.stringify({ version: 1, tasks }))
   }
 
   return (
-    <div
-      role="alert"
-      className={cn(
-        'flex flex-col gap-(--space-4) rounded-(--radius-lg) border border-danger/30 bg-surface-2 p-(--space-4) sm:flex-row sm:items-start sm:justify-between',
-        className,
-      )}
-    >
-      <div className="flex gap-(--space-3)">
-        <span className="shrink-0 text-danger">
-          <WarningIcon />
-        </span>
-        <div>
-          <p className="text-body-strong text-primary">{copy.title}</p>
-          <p className="text-body text-secondary">{copy.body}</p>
-        </div>
-      </div>
-
-      <div className="flex shrink-0 gap-(--space-2)">
+    <>
+      <NoticeBlock
+        role="alert"
+        tone="danger"
+        icon={
+          <span className="text-danger">
+            <WarningIcon />
+          </span>
+        }
+        title={copy.title}
+        body={copy.body}
+        className={className}
+      >
         {!isUnreadable && (
-          <Button variant="secondary" size="sm" onClick={retryPersist}>
-            Повторить
-          </Button>
+          <>
+            <Button variant="secondary" size="sm" onClick={retryPersist}>
+              Повторить
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleExportInMemory}>
+              Выгрузить в файл
+            </Button>
+          </>
         )}
-        <Button variant="ghost" size="sm" onClick={handleExport}>
-          Выгрузить в файл
-        </Button>
-      </div>
-    </div>
+        {isUnreadable && backup !== null && (
+          <>
+            <Button variant="secondary" size="sm" onClick={exportToFile}>
+              Выгрузить в файл
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setConfirmOpen(true)}>
+              Удалить копию
+            </Button>
+          </>
+        )}
+      </NoticeBlock>
+
+      {isUnreadable && (
+        <ConfirmDialog
+          open={confirmOpen}
+          title="Удалить повреждённую копию?"
+          body="Копия удалится из браузера, и восстановить её будет нельзя. Текущий список задач останется на месте."
+          confirmLabel="Удалить копию"
+          cancelLabel="Отмена"
+          confirmVariant="danger"
+          onConfirm={() => {
+            remove()
+            setConfirmOpen(false)
+          }}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      )}
+    </>
   )
 }

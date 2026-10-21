@@ -200,6 +200,26 @@
   animation: toast-out 160ms var(--ease-in-fast);
 }
 
+/* ---- QuarantineNotice dismiss (design-quarantine-surface §6) ------------- */
+/* Height is never collapsed — the list below just takes the freed space on
+ * the next frame once the block unmounts. No "notice-in": appearance on page
+ * load is never animated (the block is already there in the first frame). */
+@keyframes notice-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@utility animate-notice-out {
+  /* 160ms is mirrored as `NOTICE_EXIT_MS` in components/QuarantineNotice.tsx,
+   * which unmounts on a timeout rather than `onAnimationEnd` (same jsdom gap
+   * as animate-toast-out above). Keep both in sync if this ever changes. */
+  animation: notice-out 160ms var(--ease-in-fast);
+}
+
 /* ---- Modal in (spec 3.16, motion table row "modal-in") ------------------- */
 /* No "modal-out" row exists in the motion table, so ConfirmDialog closes
  * with no exit animation — that's the spec, not an oversight here. */
