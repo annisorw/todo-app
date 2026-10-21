@@ -12,6 +12,13 @@ export interface PrioritySelectProps {
   value: Priority
   onChange: (value: Priority) => void
   className?: string
+  /**
+   * Fires on every open/close of the menu. The menu is a `--z-dropdown` layer
+   * rendered in place, so a host that is its own stacking context (the desktop
+   * `TaskRow`, which carries `backdrop-filter`) has to raise itself while the
+   * menu is open — and it cannot see this state otherwise.
+   */
+  onOpenChange?: (open: boolean) => void
   /** Forwarded to the trigger chip — the desktop row quick-path uses this for roving tabindex. */
   tabIndex?: number
   /**
@@ -46,11 +53,24 @@ const PRIORITY_GLYPH: Partial<Record<Priority, string>> = {
  * access (architecture, section 2): `Composer`, `TaskEditor` and the
  * desktop row quick-path all drive the same component.
  */
-export function PrioritySelect({ value, onChange, className, tabIndex, align = 'start' }: PrioritySelectProps) {
+export function PrioritySelect({
+  value,
+  onChange,
+  className,
+  onOpenChange,
+  tabIndex,
+  align = 'start',
+}: PrioritySelectProps) {
   const [open, setOpen] = useState(false)
   const anchorRef = useRef<HTMLButtonElement>(null)
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const menuId = useId()
+
+  /** The one place `open` changes, so the outward report cannot drift from it. */
+  function changeOpen(next: boolean) {
+    setOpen(next)
+    onOpenChange?.(next)
+  }
 
   function handleSelect(next: Priority) {
     onChange(next)
@@ -78,7 +98,7 @@ export function PrioritySelect({ value, onChange, className, tabIndex, align = '
         expanded={open}
         aria-haspopup="menu"
         aria-controls={open ? menuId : undefined}
-        onClick={() => setOpen((isOpen) => !isOpen)}
+        onClick={() => changeOpen(!open)}
         className={className}
         tabIndex={tabIndex}
       />
@@ -95,7 +115,7 @@ export function PrioritySelect({ value, onChange, className, tabIndex, align = '
             align === 'end' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
           )}
         >
-          <Menu id={menuId} items={items} anchorRef={anchorRef} onClose={() => setOpen(false)} />
+          <Menu id={menuId} items={items} anchorRef={anchorRef} onClose={() => changeOpen(false)} />
         </motion.div>
       )}
     </div>

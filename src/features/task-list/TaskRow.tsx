@@ -2,6 +2,7 @@ import { Reorder, motion, useDragControls, useMotionValue, useTransform } from '
 import type { DragControls } from 'framer-motion'
 import { useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, RefObject, TouchEvent } from 'react'
+import { Button } from '../../components/Button'
 import { Checkbox } from '../../components/Checkbox'
 import { DragHandle } from '../../components/DragHandle'
 import { DueDateChip } from '../../components/DueDateChip'
@@ -62,6 +63,16 @@ export interface TaskRowReorder {
    */
   onDragStart: () => void
   onDragEnd: () => void
+  /**
+   * design-spec 6.4's four intents, straight off `useTaskReorder`. The mobile
+   * move mode drives the same transitions from the `Menu` item and the on-screen
+   * ↑ / ↓ / «Готово» / «Отмена» strip that the keyboard mode drives from keys, so both
+   * announce the same words without this component restating any of them.
+   */
+  onGrab: () => void
+  onStep: (delta: -1 | 1) => void
+  onDrop: () => void
+  onCancel: () => void
 }
 
 export interface TaskRowProps {
@@ -104,6 +115,22 @@ function MoreIcon() {
       <circle cx="8" cy="3" r="1.3" />
       <circle cx="8" cy="8" r="1.3" />
       <circle cx="8" cy="13" r="1.3" />
+    </svg>
+  )
+}
+
+function ArrowUpIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="size-4" fill="none" aria-hidden="true">
+      <path d="M8 13V3m0 0L3.5 7.5M8 3l4.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ArrowDownIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="size-4" fill="none" aria-hidden="true">
+      <path d="M8 3v10m0 0l4.5-4.5M8 13L3.5 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -199,6 +226,10 @@ export function TaskRow({
   const isDesktop = useMediaQuery('(min-width: 640px)')
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const [menuOpen, setMenuOpen] = useState(false)
+  // The two desktop quick-path chips own their own open state, but the row has
+  // to know about it — see `popupOpen` below for why.
+  const [priorityOpen, setPriorityOpen] = useState(false)
+  const [dueDateOpen, setDueDateOpen] = useState(false)
   // Esc (criterion in FELA-120) must return focus to whichever element actually opened
   // the menu: the gesture has no focusable origin of its own, so it keeps using the
   // row's roving-focus anchor (the checkbox); the mobile `more` button is its own anchor.
@@ -212,6 +243,7 @@ export function TaskRow({
   const rowRef = useRef<HTMLLIElement>(null)
   const checkboxRef = useRef<HTMLInputElement>(null)
   const moreRef = useRef<HTMLButtonElement>(null)
+  const moveUpRef = useRef<HTMLButtonElement>(null)
   const longPressTimer = useRef<number | null>(null)
   const touchStartX = useRef<number | null>(null)
   const touchStartY = useRef<number | null>(null)
@@ -306,8 +338,70 @@ export function TaskRow({
 
   const menuAnchorRef = menuAnchorKind === 'more' ? moreRef : checkboxRef
 
+  /**
+   * design-spec 6.4's mobile move mode *is* the lifted state seen from a
+   * phone, not a second flag beside it: the `Menu` item is the only way to
+   * lift a row there (the normal mobile row has no handle at all, 3.14), so
+   * reading the mode off `isGrabbed` keeps one source of truth for "which row
+   * is held". A refused `grab` — another row still held, this row gone from
+   * the list — therefore cannot leave a strip on screen with nothing lifted.
+   */
+  const moveMode = !isDesktop && reorder !== undefined && reorder.isMovable && reorder.isGrabbed
+
+  // Focus on entry goes to ↑ (design-spec 6.4). The `Menu` item commits the
+  // grab and the close in one batch, so the strip is already mounted here.
+  useEffect(() => {
+    if (moveMode) moveUpRef.current?.focus()
+  }, [moveMode])
+
+  /**
+   * Both of 6.4's outcomes — «Готово» commits where the row stands,
+   * «Отмена» (or `Esc`, its second path) puts it back — and the one focus
+   * rule they share: whichever way the mode ends, focus returns to the
+   * `more` button of the same row.
+   */
+  function exitMoveMode(commit: boolean) {
+    if (reorder === undefined) return
+    if (commit) reorder.onDrop()
+    else reorder.onCancel()
+    moreRef.current?.focus()
+  }
+
+  function handleRowKeyDown(event: KeyboardEvent) {
+    // design-spec 6.4 — v1.10 keeps the handle mounted for the duration of the
+    // mode, so the handle's own keyboard path also ends it: `Space` commits,
+    // `Esc` puts the row back. Both unmount the handle, which would leave
+    // focus on `<body>`, so the focus return belongs here for either path.
+    //
+    // The intent itself must not run twice. `useTaskReorder` marks the key
+    // handled, so `defaultPrevented` tells "the handle already did it" from
+    // "nobody did it yet" — the convention `useRowShortcuts` already follows.
+    // A second `cancel` is not a no-op: it reads the pre-revert order off the
+    // props of this same render and moves the row back again.
+    if (moveMode && (event.key === 'Escape' || event.key === ' ')) {
+      if (event.defaultPrevented) {
+        moreRef.current?.focus()
+        return
+      }
+      if (event.key === 'Escape') {
+        // Prevented so `useGlobalShortcuts`' «снять выделение» does not blur
+        // the button we are putting focus back on.
+        event.preventDefault()
+        exitMoveMode(false)
+        return
+      }
+    }
+    onRowKeyDown(event)
+  }
+
   const menuItems: MenuItemConfig[] = [
     { key: 'edit', label: 'Изменить', onSelect: onOpenEditor },
+    // design-spec 3.15 — mobile only: the desktop row already offers the
+    // handle and `Ctrl/Cmd+↑/↓`, so a third path to the same action there
+    // would be clutter.
+    ...(!isDesktop && reorder !== undefined && reorder.isMovable
+      ? [{ key: 'move', label: 'Переместить', onSelect: reorder.onGrab } satisfies MenuItemConfig]
+      : []),
     { key: 'delete', label: 'Удалить', variant: 'danger', onSelect: onRemove },
   ]
 
@@ -335,7 +429,14 @@ export function TaskRow({
       onToggle={onToggle}
       onOpenEditor={onOpenEditor}
       onQuickChange={onQuickChange}
+      onPriorityOpenChange={setPriorityOpen}
+      onDueDateOpenChange={setDueDateOpen}
       moreRef={moreRef}
+      moveMode={moveMode}
+      moveUpRef={moveUpRef}
+      onMoveStep={(delta) => reorder?.onStep(delta)}
+      onMoveDone={() => exitMoveMode(true)}
+      onMoveCancel={() => exitMoveMode(false)}
       menuOpen={menuOpen}
       setMenuOpen={setMenuOpen}
       menuAnchorRef={menuAnchorRef}
@@ -378,7 +479,34 @@ export function TaskRow({
     </>
   )
 
-  const shellClassName = isEditing && isDesktop ? undefined : 'relative'
+  // `backdrop-filter` on `.task-row` (3.11, fallback block 2.7) makes the row
+  // its own stacking context, so every `--z-dropdown` *inside* the row is
+  // scoped to the row and paints under the next row instead of over it.
+  // Three popups live in there: the row `Menu` on both breakpoints, and on
+  // desktop the `PrioritySelect` menu (3.12) and the `DueDatePicker` panel
+  // (3.13, 224px wide and taller than the row). The row has to be raised
+  // while *any* of them is open. `--z-content` and not `--z-dropdown`: the
+  // row must stay below the sticky toolbar (2.9).
+  //
+  // The two chip flags are read only while the chips are actually mounted: an
+  // unmount (the desktop editor replacing the row body, or the viewport
+  // dropping to the mobile static chips) is not a close, and the row must not
+  // stay raised with nothing open. Derived here rather than reset in an
+  // effect, which would be a render cascade for a value render can compute.
+  const chipsMounted = isDesktop && !isEditing
+  const popupOpen = menuOpen || (chipsMounted && (priorityOpen || dueDateOpen))
+
+  // Every active-list row renders through `Reorder.Item` (`TaskList.tsx`),
+  // which always writes its own inline `z-index` (`unset` at rest, `1` while
+  // dragging — framer-motion/dist/es/components/Reorder/Item.mjs, spread
+  // after `...style`, so a `style` prop here can never win). An unmarked
+  // author rule never beats an inline declaration, so the plain
+  // `z-(--z-content)` utility used below was a no-op: `elementFromPoint` on
+  // the built `dist` kept landing on the next row. Tailwind's `!` modifier
+  // emits `!important`, which does beat an inline style with no `!important`
+  // of its own — that is the only lever available short of moving the popups
+  // out of the row entirely.
+  const shellClassName = isEditing && isDesktop ? undefined : cn('relative', popupOpen && 'z-(--z-content)!')
 
   // The reorderable row's share of `task-add`/`task-delete` — see the
   // comment on the wrapper below. Reduced motion keeps opacity only, so
@@ -402,7 +530,7 @@ export function TaskRow({
         <motion.li
           ref={rowRef}
           {...taskRowMarker}
-          onKeyDown={onRowKeyDown}
+          onKeyDown={handleRowKeyDown}
           // `editor-open` (motion table, section 5): under reduced motion the
           // switch to `TaskEditor`/`TaskEditorSheet` is instant and never
           // animates height — disabling `layout` drops the interpolated
@@ -423,7 +551,7 @@ export function TaskRow({
         // stack drops focus out of a row («снять выделение»), and that is the
         // one thing it cannot learn from the React tree.
         {...taskRowMarker}
-        onKeyDown={onRowKeyDown}
+        onKeyDown={handleRowKeyDown}
         // `task-settle`/`list-reflow` (motion table, section 5): under
         // reduced motion reordering is instant, so the `layout`
         // interpolation is off. `task-add`/`task-delete` keep a 120ms fade
@@ -444,7 +572,7 @@ export function TaskRow({
               { opacity: 0, x: 12, height: 0, transition: EXIT_TRANSITION }
         }
         transition={prefersReducedMotion ? { duration: 0.12 } : ENTER_TRANSITION}
-        className="relative"
+        className={shellClassName}
       >
         {children}
       </motion.li>
@@ -458,7 +586,7 @@ export function TaskRow({
       // stack drops focus out of a row («снять выделение»), and that is the
       // one thing it cannot learn from the React tree.
       {...taskRowMarker}
-      onKeyDown={onRowKeyDown}
+      onKeyDown={handleRowKeyDown}
       as="li"
       value={reorder.value}
       // Only the `DragHandle` starts a drag (architecture section 2): with
@@ -534,7 +662,16 @@ interface RowBodyProps {
   onToggle: () => void
   onOpenEditor: () => void
   onQuickChange: (patch: TaskPatch) => void
+  /** Reported back up so the row can out-stack the next row while a chip popup is open. */
+  onPriorityOpenChange: (open: boolean) => void
+  onDueDateOpenChange: (open: boolean) => void
   moreRef: RefObject<HTMLButtonElement | null>
+  /** design-spec 6.4 — this row is held on mobile, so it shows the ↑ / ↓ / «Готово» / «Отмена» strip instead of its meta chips. */
+  moveMode: boolean
+  moveUpRef: RefObject<HTMLButtonElement | null>
+  onMoveStep: (delta: -1 | 1) => void
+  onMoveDone: () => void
+  onMoveCancel: () => void
   menuOpen: boolean
   setMenuOpen: (value: boolean) => void
   menuAnchorRef: RefObject<HTMLElement | null>
@@ -568,7 +705,14 @@ function RowBody({
   onToggle,
   onOpenEditor,
   onQuickChange,
+  onPriorityOpenChange,
+  onDueDateOpenChange,
   moreRef,
+  moveMode,
+  moveUpRef,
+  onMoveStep,
+  onMoveDone,
+  onMoveCancel,
   menuOpen,
   setMenuOpen,
   menuAnchorRef,
@@ -596,16 +740,38 @@ function RowBody({
       transition={{ duration: prefersReducedMotion ? 0 : DRAG_LIFT_S, ease: EASE_STANDARD }}
       className={cn(
         'task-row group flex min-h-(--layout-row-h) items-center gap-(--space-3) rounded-(--radius-lg) border px-(--space-2) transition-colors duration-(--duration-fast) ease-standard',
+        // design-spec 6.4 — only the move mode has a second line: the control
+        // strip is `basis-full`, so it needs the row to wrap. Without the
+        // mode the row must stay single-line, or a long title plus chips
+        // would push the buttons down.
+        moveMode && 'flex-wrap py-(--space-2)',
         // S8: an opaque fill, because a translucent card in flight reads
-        // dirty over the rows it passes. The hover/focus tint has to go with
+        // dirty over the rows it passes — so the lifted row drops both the
+        // `surface-1` tint and the blur. The hover/focus tint has to go with
         // it — it is a later-ordered variant and would win otherwise.
+        //
+        // In `default` the row owns a surface, per design-spec 3.11 and the
+        // `--color-surface-1` row of the 2.1/2.2 colour tables («карточка,
+        // строка, инпут»). `hover`/`focus-within` lift it to
+        // `--color-surface-2`; without a surface underneath, that "lift" reads
+        // as "appear", and on touch — where there is no hover at all — the
+        // list loses every row boundary. `.task-row` is also already listed in
+        // the mandatory 2.7 fallback block, which only makes sense for an
+        // element that really applies `backdrop-filter`.
         lifted
           ? 'border-accent bg-surface-2-solid shadow-drag'
-          : 'border-transparent bg-transparent hover:bg-surface-2 focus-within:bg-surface-2',
+          : 'border-surface-border bg-surface-1 shadow-xs backdrop-blur-(--blur-surface) hover:bg-surface-2 focus-within:bg-surface-2',
         isOverdue && 'text-overdue',
       )}
     >
-      {reorder !== undefined && reorder.isMovable && (
+      {/*
+        design-spec 3.14, rewritten in v1.10: the handle is a desktop
+        affordance. On a phone the normal row does not carry it at all — that
+        is what gives the title column its 216px back (criterion 44) — and it
+        appears only for the duration of the move mode, where it stays
+        draggable and carries `aria-grabbed` for the lifted row.
+      */}
+      {reorder !== undefined && reorder.isMovable && (isDesktop || moveMode) && (
         <span
           className={cn(
             'shrink-0 transition-opacity duration-(--duration-fast) ease-standard',
@@ -640,11 +806,19 @@ function RowBody({
       <div className="min-w-0 flex-1">
         <ExpandableTitle task={task} query={query} titleId={titleId} />
 
+        {/*
+          design-spec 6.4 — while the row is held, the meta chips give their
+          slot to the control strip. The strip itself is a child of the row,
+          not of this column: the column is 172px wide once the handle comes
+          back, and the strip needs the card's full inner width.
+        */}
+        {!moveMode && (
         <div className="mt-(--space-1) flex flex-wrap items-center gap-(--space-2)">
           {isDesktop ? (
             <PrioritySelect
               value={task.priority}
               onChange={(priority) => onQuickChange({ priority })}
+              onOpenChange={onPriorityOpenChange}
               tabIndex={tabIndex}
             />
           ) : (
@@ -660,6 +834,7 @@ function RowBody({
               <DueDatePicker
                 value={task.dueDate}
                 onChange={(dueDate) => onQuickChange({ dueDate })}
+                onOpenChange={onDueDateOpenChange}
                 tabIndex={tabIndex}
               />
             </span>
@@ -667,6 +842,7 @@ function RowBody({
             dueInfo.status !== 'none' && <DueDateChip status={dueInfo.status} label={dueInfo.label} variant="static" />
           )}
         </div>
+        )}
       </div>
 
       {task.priority !== 'none' && (
@@ -725,6 +901,64 @@ function RowBody({
               <Menu items={menuItems} anchorRef={menuAnchorRef} onClose={() => setMenuOpen(false)} />
             </div>
           )}
+        </div>
+      )}
+
+      {moveMode && (
+        /*
+          design-spec 6.4 — the move mode's control strip. It takes the
+          meta-chip slot (the chips are `static` on mobile anyway, 3.12/3.13,
+          so nothing interactive is hidden while the row is held) but spans
+          the card's inner width: four controls need ~307px, and the title
+          column is down to 172px while the handle is back in the row.
+          `basis-full` is what makes the wrapping row give it its own line.
+
+          Each button calls one of 6.4's intents, so the announcements come
+          from `useTaskReorder` word-for-word as in the keyboard mode, and
+          both of 6.4's outcomes are reachable from the screen: «Готово»
+          commits, «Отмена» puts the row back. `Esc` is the second path to
+          the latter, not the only one — a phone has no `Esc`.
+
+          `tabIndex` / `onFocus` are the row's, like every other control
+          here: the strip is part of its row, so the list stays one Tab stop
+          and focusing ↑ on entry moves the roving index onto this row —
+          without which `more`, the button 6.4 returns focus to, would stay
+          `-1` and Tab out of the strip would leave the list.
+        */
+        <div className="mt-(--space-1) flex basis-full items-center gap-(--space-2)">
+          <IconButton
+            ref={moveUpRef}
+            icon={<ArrowUpIcon />}
+            aria-label={`Переместить вверх: ${task.title}`}
+            tabIndex={tabIndex}
+            onFocus={onFocus}
+            onClick={() => onMoveStep(-1)}
+          />
+          <IconButton
+            icon={<ArrowDownIcon />}
+            aria-label={`Переместить вниз: ${task.title}`}
+            tabIndex={tabIndex}
+            onFocus={onFocus}
+            onClick={() => onMoveStep(1)}
+          />
+          <Button
+            size="sm"
+            variant="primary"
+            tabIndex={tabIndex}
+            onFocus={onFocus}
+            onClick={onMoveDone}
+          >
+            Готово
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            tabIndex={tabIndex}
+            onFocus={onFocus}
+            onClick={onMoveCancel}
+          >
+            Отмена
+          </Button>
         </div>
       )}
     </motion.div>
