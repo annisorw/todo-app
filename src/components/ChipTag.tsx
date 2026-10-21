@@ -9,14 +9,22 @@ export interface ChipTagProps extends Omit<ComponentPropsWithoutRef<'button'>, '
   children: ReactNode
 }
 
-/** Swaps element type by variant: a real `<button>` when interactive, an inert `<span>` otherwise. */
+/**
+ * Swaps element type by variant: a real `<button>` when interactive, an
+ * inert `<span>` otherwise. `id` is let through on both branches — unlike
+ * button-only props (`onClick`, `aria-expanded`, …), an id is meaningful on
+ * an inert `<span>` too: `TaskRow` (FELA-15) points the row checkbox's
+ * `aria-labelledby` at a static mobile chip's id to compose its accessible
+ * name (acceptance criterion 25). This is the live requirement the FELA-55
+ * warning's own docstring left for whoever hit it first.
+ */
 export const ChipTag = forwardRef<HTMLButtonElement, ChipTagProps>(function ChipTag(
-  { isInteractive, expanded, className, style, children, ...rest },
+  { isInteractive, expanded, className, style, children, id, ...rest },
   ref,
 ) {
   if (isInteractive) {
     return (
-      <button type="button" ref={ref} aria-expanded={expanded} style={style} className={className} {...rest}>
+      <button type="button" ref={ref} id={id} aria-expanded={expanded} style={style} className={className} {...rest}>
         {children}
       </button>
     )
@@ -30,7 +38,7 @@ export const ChipTag = forwardRef<HTMLButtonElement, ChipTagProps>(function Chip
   }
 
   return (
-    <span style={style} className={className}>
+    <span id={id} style={style} className={className}>
       {children}
     </span>
   )
