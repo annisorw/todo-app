@@ -341,14 +341,20 @@ describe('coverage', () => {
 })
 
 describe('z-index scale', () => {
+  // Spelled out in full and in order: the step values pin the ordering the spec
+  // calls a contract, so `--z-content` 1 sitting between `--z-base` and
+  // `--z-sticky` needs no separate assertion.
   it('matches the scale in design-spec 2.9', () => {
-    const scale = ['--z-base', '--z-sticky', '--z-dropdown', '--z-drag', '--z-modal', '--z-toast']
-    expect(scale.map((name) => DARK_TOKENS[name])).toEqual(['0', '10', '100', '200', '300', '400'])
-  })
-
-  // --z-content is this repo's own token, not part of the spec's scale above.
-  it('keeps --z-content below --z-sticky', () => {
-    expect(Number(DARK_TOKENS['--z-content'])).toBeLessThan(Number(DARK_TOKENS['--z-sticky']))
+    const scale = [
+      '--z-base',
+      '--z-content',
+      '--z-sticky',
+      '--z-dropdown',
+      '--z-drag',
+      '--z-modal',
+      '--z-toast',
+    ]
+    expect(scale.map((name) => DARK_TOKENS[name])).toEqual(['0', '1', '10', '100', '200', '300', '400'])
   })
 })
 
