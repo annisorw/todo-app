@@ -739,7 +739,7 @@ function RowBody({
       animate={lifted && !prefersReducedMotion ? { scale: 1.015, rotate: -0.6 } : { scale: 1, rotate: 0 }}
       transition={{ duration: prefersReducedMotion ? 0 : DRAG_LIFT_S, ease: EASE_STANDARD }}
       className={cn(
-        'task-row group flex min-h-(--layout-row-h) items-center gap-(--space-3) rounded-(--radius-lg) border px-(--space-2) transition-colors duration-(--duration-fast) ease-standard',
+        'task-row group flex min-h-(--layout-row-h) items-center gap-(--space-3) rounded-(--radius-lg) border px-(--space-2) transition duration-(--duration-fast) ease-standard',
         // design-spec 6.4 — only the move mode has a second line: the control
         // strip is `basis-full`, so it needs the row to wrap. Without the
         // mode the row must stay single-line, or a long title plus chips
@@ -758,9 +758,16 @@ function RowBody({
         // list loses every row boundary. `.task-row` is also already listed in
         // the mandatory 2.7 fallback block, which only makes sense for an
         // element that really applies `backdrop-filter`.
+        //
+        // 3.11 hover also lifts the row 1px and moves it to --shadow-sm (concept-a
+        // mock: `.row.is-hover`). That lift is itself a `translate`, which — like
+        // `backdrop-filter` above and the menu-open z lift — creates its own
+        // stacking context; reduced-motion drops the lift via its own override in
+        // base.css, since the baseline reduced-motion rule only changes how a
+        // transition runs, not which static values apply on hover.
         lifted
           ? 'border-accent bg-surface-2-solid shadow-drag'
-          : 'border-surface-border bg-surface-1 shadow-xs backdrop-blur-(--blur-surface) hover:bg-surface-2 focus-within:bg-surface-2',
+          : 'border-surface-border bg-surface-1 shadow-xs backdrop-blur-(--blur-surface) hover:-translate-y-px hover:shadow-sm hover:bg-surface-2 focus-within:bg-surface-2',
         isOverdue && 'text-overdue',
       )}
     >
