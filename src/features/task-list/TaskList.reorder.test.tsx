@@ -314,6 +314,32 @@ describe('TaskList reordering', () => {
       ])
     })
 
+    it('reads every repeat step off the live order instead of accumulating an offset', () => {
+      vi.useFakeTimers()
+      renderTaskList(makeFour())
+
+      fireEvent.click(screen.getAllByRole('checkbox')[1]!)
+
+      // Three steps inside the one 600ms window: nothing here advances the
+      // clock, and the store is read once at the end, because every
+      // `storedOrder()` spends 250ms of the window on the persist debounce.
+      fireEvent.keyDown(handleFor('Первая'), { key: 'ArrowDown', ctrlKey: true })
+      expect(announcement()).toBe('Задача «Первая» перемещена на позицию 2 из 3')
+
+      // The second step is measured from the order the first one left behind —
+      // «Первая» is now at display slot 2, so the step lands on 3 and not on
+      // the slot it would reach by counting from where the row started.
+      fireEvent.keyDown(handleFor('Первая'), { key: 'ArrowDown', ctrlKey: true })
+      expect(announcement()).toBe('Задача «Первая» перемещена на позицию 3 из 3')
+
+      // And back: one step up from the bottom undoes exactly one step, with
+      // the frozen row stepped over in this direction too.
+      fireEvent.keyDown(handleFor('Первая'), { key: 'ArrowUp', ctrlKey: true })
+      expect(announcement()).toBe('Задача «Первая» перемещена на позицию 2 из 3')
+
+      expect(storedOrder()).toEqual(['Вторая', 'Третья', 'Первая', 'Четвёртая'])
+    })
+
     it('counts the grab-mode steps in rows that are really in the order', () => {
       vi.useFakeTimers()
       renderTaskList(makeFour())
