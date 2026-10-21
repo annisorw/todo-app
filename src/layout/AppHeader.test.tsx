@@ -1,9 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { createRef } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ThemeProvider } from '../state/ThemeProvider'
 import { stubMatchMedia } from '../test/matchMedia'
 import { AppHeader } from './AppHeader'
+import type { ShortcutsPanelHandle } from './AppHeader'
 
 function renderHeader() {
   return render(
@@ -84,6 +86,23 @@ describe('AppHeader', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
+  })
+
+  it('exposes openShortcuts on the ref, the `?` shortcut (FELA-20) second trigger for the same panel', () => {
+    const ref = createRef<ShortcutsPanelHandle>()
+    render(
+      <ThemeProvider>
+        <AppHeader ref={ref} />
+      </ThemeProvider>,
+    )
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    act(() => {
+      ref.current?.openShortcuts()
+    })
+
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Горячие клавиши')
   })
 })
 

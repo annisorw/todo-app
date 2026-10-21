@@ -14,11 +14,12 @@ import { useComposerForm } from './useComposerForm'
 export interface ComposerHandle {
   /**
    * design-spec S2 — the `first-run` `EmptyState`'s "Добавить задачу" action
-   * puts focus in the field. Desktop focuses the panel's own textarea;
-   * mobile has no visible field to focus (it's `Fab` + a sheet instead), so
-   * it opens the sheet, which autofocuses its own textarea already.
+   * puts focus in the field, same command as the `N` shortcut (FELA-20).
+   * Desktop focuses the panel's own textarea; mobile has no visible field
+   * to focus (it's `Fab` + a sheet instead), so it opens the sheet, which
+   * autofocuses its own textarea already.
    */
-  focus: () => void
+  requestNewTask: () => void
 }
 
 export interface ComposerProps {
@@ -50,7 +51,7 @@ export function Composer({ ref }: ComposerProps = {}) {
   useImperativeHandle(
     ref,
     () => ({
-      focus: () => {
+      requestNewTask: () => {
         if (isDesktop) panelRef.current?.querySelector('textarea')?.focus()
         else setSheetOpen(true)
       },

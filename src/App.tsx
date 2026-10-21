@@ -51,7 +51,7 @@ function AppBody() {
         <ErrorBanner />
         <Composer ref={composerRef} />
         {isFirstRun ? (
-          <EmptyState variant="first-run" onAddTask={() => composerRef.current?.focus()} />
+          <EmptyState variant="first-run" onAddTask={() => composerRef.current?.requestNewTask()} />
         ) : (
           <>
             <Toolbar

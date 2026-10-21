@@ -202,10 +202,10 @@ describe('Composer', () => {
 
 /**
  * design-spec S2 — the `first-run` `EmptyState`'s "Добавить первую задачу"
- * action calls this handle. Desktop has a visible field to focus directly;
- * mobile doesn't (it's `Fab` + a sheet), so there `focus()` opens the sheet
- * instead, which autofocuses its own field already (no further wiring
- * needed there).
+ * action calls this handle, same as the `N` shortcut (FELA-20). Desktop has
+ * a visible field to focus directly; mobile doesn't (it's `Fab` + a sheet),
+ * so there `requestNewTask()` opens the sheet instead, which autofocuses
+ * its own field already (no further wiring needed there).
  */
 describe('Composer imperative handle', () => {
   beforeEach(() => {
@@ -222,7 +222,7 @@ describe('Composer imperative handle', () => {
     )
 
     act(() => {
-      ref.current?.focus()
+      ref.current?.requestNewTask()
     })
 
     expect(screen.getByRole('textbox', { name: 'Текст новой задачи' })).toHaveFocus()
@@ -240,7 +240,7 @@ describe('Composer imperative handle', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
     act(() => {
-      ref.current?.focus()
+      ref.current?.requestNewTask()
     })
 
     expect(screen.getByRole('dialog', { name: 'Добавить задачу' })).toBeInTheDocument()
