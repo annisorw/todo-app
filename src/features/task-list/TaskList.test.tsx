@@ -930,6 +930,19 @@ describe('TaskList', () => {
       expect(onSearchAll).toHaveBeenCalledOnce()
     })
 
+    it('shows EmptyState no-active when a search matches only a completed task (FELA-153)', () => {
+      stubMatchMedia(false)
+      renderTaskList(
+        [makeTask({ id: 't1', title: 'Купить молоко', completedAt: '2026-01-01T00:00:00.000Z' })],
+        { filter: 'all', query: 'молоко' },
+      )
+
+      expect(screen.getByText('Все активные задачи выполнены')).toBeInTheDocument()
+      // Title is split by the <mark> highlight, so match on the row's
+      // checkbox label instead (same pattern as the search-highlighting tests).
+      expect(screen.getByRole('checkbox', { name: 'Купить молоко' })).toBeInTheDocument()
+    })
+
     it('hides "Искать во всех" and clears the search via "Очистить поиск" when the filter is already "Все"', async () => {
       const user = userEvent.setup()
       const onClearSearch = vi.fn()
