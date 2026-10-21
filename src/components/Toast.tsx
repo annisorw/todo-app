@@ -55,7 +55,7 @@ export function Toast({
       onFocus={onFocus}
       onBlur={onBlur}
       className={cn(
-        'flex items-center gap-(--space-3) rounded-full border bg-surface-2 py-(--space-3) pl-(--space-4) pr-(--space-3) shadow-lg backdrop-blur-(--blur-surface)',
+        'toast flex items-center gap-(--space-3) rounded-full border bg-surface-2 py-(--space-3) pl-(--space-4) pr-(--space-3) shadow-lg backdrop-blur-(--blur-surface)',
         VARIANT_CLASSES[variant],
         closing ? 'animate-toast-out' : 'animate-toast-in',
       )}

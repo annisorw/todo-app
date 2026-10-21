@@ -57,6 +57,18 @@ describe('ToastProvider', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Опасность')
   })
 
+  it('carries the .toast class on the root element (spec 2.7 fallback hook)', () => {
+    render(
+      <ToastProvider>
+        <PushButton options={{ variant: 'info', message: 'Инфо' }} label="info" />
+      </ToastProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'info' }))
+
+    expect(screen.getByRole('status')).toHaveClass('toast')
+  })
+
   it('dismisses a toast after 6s', () => {
     render(
       <ToastProvider>
