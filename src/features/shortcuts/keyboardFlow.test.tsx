@@ -384,6 +384,52 @@ describe('keyboard flow (design-spec 6.3 / section 7)', () => {
       expect(screen.getByRole('checkbox', { name: /Задача 1/ })).toHaveFocus()
     })
 
+    it('Enter in an open priority popup picks the item instead of saving the task', async () => {
+      const user = userEvent.setup()
+      renderApp(makeTasks(1))
+
+      screen.getByRole('checkbox', { name: /Задача 1/ }).focus()
+      await user.keyboard('e')
+
+      const textarea = screen.getByRole('textbox', { name: 'Текст задачи' })
+      const editor = textarea.closest('div') as HTMLElement
+      await user.click(within(editor).getByRole('button', { name: /Приоритет/ }))
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+
+      await user.keyboard('{ArrowDown}')
+      await user.keyboard('{Enter}')
+
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+      expect(screen.getByRole('textbox', { name: 'Текст задачи' })).toBeInTheDocument()
+      // The popup didn't just swallow Enter: the picked value actually landed on the draft.
+      expect(within(editor).getByRole('button', { name: 'Средний' })).toBeInTheDocument()
+    })
+
+    it('Enter in an open due-date popup picks the item instead of saving the task', async () => {
+      const user = userEvent.setup()
+      renderApp(makeTasks(1))
+
+      screen.getByRole('checkbox', { name: /Задача 1/ }).focus()
+      await user.keyboard('e')
+
+      const textarea = screen.getByRole('textbox', { name: 'Текст задачи' })
+      const editor = textarea.closest('div') as HTMLElement
+      await user.click(within(editor).getByRole('button', { name: /Срок/ }))
+      // The due-date panel has no `role="menu"` (it's a native date input plus
+      // preset buttons), so its presence is asserted through a preset instead.
+      expect(screen.getByRole('button', { name: 'Убрать срок' })).toBeInTheDocument()
+
+      // Tab (not ArrowDown — this panel has no arrow-key navigation) moves
+      // focus from the date input to the first preset, «Сегодня».
+      await user.tab()
+      await user.keyboard('{Enter}')
+
+      expect(screen.queryByRole('button', { name: 'Убрать срок' })).not.toBeInTheDocument()
+      expect(screen.getByRole('textbox', { name: 'Текст задачи' })).toBeInTheDocument()
+      // The popup didn't just swallow Enter: the picked value actually landed on the draft.
+      expect(within(editor).getByRole('button', { name: 'Сегодня' })).toBeInTheDocument()
+    })
+
     it('Enter in the textarea saves; the global keys stay quiet while typing there', async () => {
       const user = userEvent.setup()
       renderApp(makeTasks(1))

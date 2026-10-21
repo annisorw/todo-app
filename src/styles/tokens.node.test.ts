@@ -78,6 +78,13 @@ const NOT_A_FOREGROUND = [
 const SKELETON_BASE = '--skeleton-base'
 const SKELETON_SHINE = '--skeleton-shine'
 
+/**
+ * The `<mark>` backing (spec 3.11, state `search-hit`). Translucent, and it
+ * sits two layers deep: the row surface is itself translucent over the canvas,
+ * so the pixel the eye measures is canvas -> surface -> backing.
+ */
+const SEARCH_HIT_BG = '--color-search-hit-bg'
+
 interface Pair {
   foreground: string
   background: string
@@ -278,6 +285,33 @@ describe.each(Object.entries(THEMES))('skeleton — %s theme', (_themeName, toke
   })
 })
 
+/**
+ * The search highlight carries text, so it is held to 4.5:1 like any other text
+ * pairing — but measured after compositing, because both the backing and the
+ * surface under it are translucent. Pinning `color` on `mark` instead of
+ * inheriting it is what makes this hold on a *completed* row; the counter-test
+ * in "the contrast check itself" below is the proof.
+ */
+describe.each(Object.entries(THEMES))('search highlight — %s theme', (_themeName, tokens) => {
+  const canvas = tokenColor(tokens, '--color-bg-canvas')
+  const surface = compositedToken(tokens, '--color-surface-1', canvas)
+  const highlight = compositedToken(tokens, SEARCH_HIT_BG, surface)
+
+  it('reads the pinned glyph colour at 4.5:1 or better over the backing', () => {
+    const ratio = contrastRatio(tokenColor(tokens, '--color-text-primary'), highlight)
+
+    expect(Number(ratio.toFixed(2))).toBeGreaterThanOrEqual(TEXT_MIN_RATIO)
+  })
+
+  it('stays visible as a backing against the un-highlighted row surface', () => {
+    // Not a WCAG minimum — the highlight is a backing, not a shape that carries
+    // meaning on its own (the list is already filtered and the LiveRegion says
+    // how many matched). This floor catches the real failure: an alpha so low
+    // that the wash composites to the surface it sits on and disappears.
+    expect(contrastRatio(highlight, surface)).toBeGreaterThanOrEqual(SKELETON_MIN_RATIO)
+  })
+})
+
 describe('coverage', () => {
   it('classifies every colour token as checked or decorative', () => {
     const classified = new Set<string>([
@@ -286,6 +320,7 @@ describe('coverage', () => {
       ...NOT_A_FOREGROUND,
       SKELETON_BASE,
       SKELETON_SHINE,
+      SEARCH_HIT_BG,
       '--color-accent-contrast',
     ])
 
@@ -334,6 +369,21 @@ describe('the contrast check itself', () => {
 
   it('refuses to measure a translucent token', () => {
     expect(() => tokenColor(DARK_TOKENS, '--color-surface-1')).toThrow(/opaque hex colour/)
+  })
+
+  it('fails the highlight check if the glyph colour is inherited from a completed row', () => {
+    // Why `mark` pins `color` instead of using `inherit`. A completed task's
+    // title is --color-text-tertiary (spec 3.11, state `completed`); let the
+    // highlight inherit that and the matched word lands under 4.5:1 on its own
+    // backing. If this ever clears the floor, `inherit` became safe and the
+    // comment in base.css is stale.
+    const canvas = tokenColor(DARK_TOKENS, '--color-bg-canvas')
+    const surface = compositedToken(DARK_TOKENS, '--color-surface-1', canvas)
+    const highlight = compositedToken(DARK_TOKENS, SEARCH_HIT_BG, surface)
+
+    const ratio = contrastRatio(tokenColor(DARK_TOKENS, '--color-text-tertiary'), highlight)
+
+    expect(ratio).toBeLessThan(TEXT_MIN_RATIO)
   })
 
   it('fails the skeleton check when the light theme inherits the dark values', () => {
