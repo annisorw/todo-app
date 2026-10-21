@@ -56,7 +56,7 @@ export function ComposerSheet({ form, triggerRef, onClose }: ComposerSheetProps)
         animate={{ opacity: 1 }}
         transition={{ duration: 0.16 }}
         onClick={onClose}
-        className="absolute inset-0 bg-[rgba(3,3,10,0.55)]"
+        className="absolute inset-0 bg-modal-backdrop"
       />
 
       <motion.div
