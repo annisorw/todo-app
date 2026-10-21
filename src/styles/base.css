@@ -45,9 +45,7 @@
   .composer,
   .task-row,
   .search-field,
-  .segmented-control,
-  .icon-button,
-  .progress-ring {
+  .segmented-control {
     background: var(--color-surface-1-solid);
   }
   /* Toast sits on --color-surface-2 (spec 3.17): the fallback must keep the
