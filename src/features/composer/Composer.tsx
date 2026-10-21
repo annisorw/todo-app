@@ -1,6 +1,8 @@
 import { useId, useImperativeHandle, useRef, useState } from 'react'
 import type { Ref } from 'react'
+import type { Filter } from '../../domain/filters'
 import { Fab } from '../../layout/Fab'
+import { useToast } from '../../state/useToast'
 import { useTaskStore } from '../../state/useTaskStore'
 import { cn } from '../../lib/cn'
 import { useMediaQuery } from '../../lib/useMediaQuery'
@@ -27,6 +29,8 @@ export interface ComposerHandle {
 
 export interface ComposerProps {
   ref?: Ref<ComposerHandle>
+  /** The toolbar's active filter — a task added while on `completed` lands in `Активные`, out of sight, so it needs a toast explaining where it went (design-spec S5). */
+  filter: Filter
 }
 
 /**
@@ -49,9 +53,18 @@ export interface ComposerProps {
  * hidden writer would have meant two copies of one truth. Here nothing outside
  * reads anything.
  */
-export function Composer({ ref }: ComposerProps = {}) {
+export function Composer({ ref, filter }: ComposerProps) {
   const { addTask, isAtLimit } = useTaskStore()
-  const form = useComposerForm({ addTask, isAtLimit })
+  const { pushToast } = useToast()
+  const form = useComposerForm({
+    addTask,
+    isAtLimit,
+    onTaskAdded: () => {
+      if (filter === 'completed') {
+        pushToast({ variant: 'info', message: 'Задача добавлена в «Активные»' })
+      }
+    },
+  })
   const [sheetOpen, setSheetOpen] = useState(false)
   const isDesktop = useMediaQuery('(min-width: 640px)')
   const fabRef = useRef<HTMLButtonElement>(null)

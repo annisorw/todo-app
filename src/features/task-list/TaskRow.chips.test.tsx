@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react'
-import { render, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTask } from '../../test/factories'
 import { stubMatchMedia } from '../../test/matchMedia'
@@ -78,5 +78,59 @@ describe('TaskRow empty-chip visibility (design-spec 3.12-3.13)', () => {
     const trigger = quickPathScope(container).getByText('Завтра')
     const wrapper = trigger.closest('button')?.parentElement?.parentElement
     expect(wrapper?.className ?? '').not.toContain('opacity-0')
+  })
+})
+
+/**
+ * Acceptance criterion 31: on mobile the row's priority/due-date chips are
+ * display only — not clickable, not focusable, checked in the DOM rather than
+ * by eye. `PriorityChip.test.tsx`/`DueDateChip.test.tsx` already prove the
+ * `static` variant itself is inert; what is missing without this test is the
+ * link to `TaskRow` — that its mobile (`!isDesktop`) branch actually renders
+ * the real-value chip through that inert variant, not the interactive one.
+ */
+describe('TaskRow mobile chips are display-only (acceptance criterion 31)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('renders neither chip as a button or tab stop — only as inert text', () => {
+    stubMatchMedia(false)
+
+    const { container } = render(
+      <ul>
+        <TaskRow
+          task={makeTask({ id: 't1', title: 'Купить молоко', priority: 'high', dueDate: '2026-10-22' })}
+          query=""
+          todayKey="2026-10-21"
+          tabIndex={0}
+          isEditing={false}
+          registerRef={() => {}}
+          onFocus={() => {}}
+          onKeyDown={() => {}}
+          onRowKeyDown={() => {}}
+          onToggle={() => {}}
+          onOpenEditor={() => {}}
+          onCloseEditor={() => {}}
+          onSave={() => {}}
+          onRemove={() => {}}
+          onQuickChange={() => {}}
+        />
+      </ul>,
+    )
+
+    expect(screen.queryByRole('button', { name: /Высокий/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Завтра/ })).not.toBeInTheDocument()
+
+    // Scoped to the visible quick-path row: the title text also lives in a
+    // hidden `sr-only` duplicate chip that composes the checkbox's accessible
+    // name (criterion 25), and `getByText` is ambiguous between the two.
+    const quickPath = within(container.querySelector('.flex-wrap') as HTMLElement)
+    const priorityChip = quickPath.getByText('Высокий')
+    const dueDateChip = quickPath.getByText('Завтра')
+    expect(priorityChip.tagName).toBe('SPAN')
+    expect(dueDateChip.tagName).toBe('SPAN')
+    expect(priorityChip).not.toHaveAttribute('tabindex')
+    expect(dueDateChip).not.toHaveAttribute('tabindex')
   })
 })

@@ -301,6 +301,41 @@ describe('keyboard flow (design-spec 6.3 / section 7)', () => {
 
       expect(storeSummary()).toBe('Активных: 0 · Выполнено: 1')
     })
+
+    /**
+     * Acceptance criterion 17: under `prefers-reduced-motion: reduce`, no
+     * action becomes unavailable. This whole file already runs with reduced
+     * motion active — `stubMatchMedia` cannot distinguish the viewport query
+     * from the motion query, so every test above incidentally proves this for
+     * the keyboard path, and the "stops working" test just above does the
+     * same for a mouse click. This test is the one place that says so
+     * explicitly and chains the full add → complete → delete → undo cycle in
+     * one pass, so a future reader does not have to reconstruct criterion 17's
+     * coverage from incidental side effects.
+     */
+    it('every action in the add/complete/delete/undo cycle still works (criterion 17)', async () => {
+      const user = userEvent.setup()
+      renderApp(makeTasks(1))
+
+      await user.keyboard('n')
+      await user.keyboard('Новая задача{Enter}')
+      expect(storeSummary()).toBe('Активных: 2 · Выполнено: 0')
+
+      const checkbox = screen.getByRole('checkbox', { name: 'Новая задача' })
+      await user.click(checkbox)
+      expect(storeSummary()).toBe('Активных: 1 · Выполнено: 1')
+
+      await user.click(screen.getByRole('checkbox', { name: 'Новая задача' }))
+      expect(storeSummary()).toBe('Активных: 2 · Выполнено: 0')
+
+      screen.getByRole('checkbox', { name: 'Новая задача' }).focus()
+      await user.keyboard('{Delete}')
+      expect(screen.getByRole('alert')).toHaveTextContent('Задача удалена: «Новая задача»')
+      expect(storeSummary()).toBe('Активных: 1 · Выполнено: 0')
+
+      await user.keyboard('{Control>}z{/Control}')
+      expect(storeSummary()).toBe('Активных: 2 · Выполнено: 0')
+    })
   })
 
   describe('editing from the keyboard (acceptance criterion 32)', () => {
@@ -347,6 +382,52 @@ describe('keyboard flow (design-spec 6.3 / section 7)', () => {
       await user.keyboard('{Escape}')
       expect(screen.queryByRole('textbox', { name: 'Текст задачи' })).not.toBeInTheDocument()
       expect(screen.getByRole('checkbox', { name: /Задача 1/ })).toHaveFocus()
+    })
+
+    it('Enter in an open priority popup picks the item instead of saving the task', async () => {
+      const user = userEvent.setup()
+      renderApp(makeTasks(1))
+
+      screen.getByRole('checkbox', { name: /Задача 1/ }).focus()
+      await user.keyboard('e')
+
+      const textarea = screen.getByRole('textbox', { name: 'Текст задачи' })
+      const editor = textarea.closest('div') as HTMLElement
+      await user.click(within(editor).getByRole('button', { name: /Приоритет/ }))
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+
+      await user.keyboard('{ArrowDown}')
+      await user.keyboard('{Enter}')
+
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+      expect(screen.getByRole('textbox', { name: 'Текст задачи' })).toBeInTheDocument()
+      // The popup didn't just swallow Enter: the picked value actually landed on the draft.
+      expect(within(editor).getByRole('button', { name: 'Средний' })).toBeInTheDocument()
+    })
+
+    it('Enter in an open due-date popup picks the item instead of saving the task', async () => {
+      const user = userEvent.setup()
+      renderApp(makeTasks(1))
+
+      screen.getByRole('checkbox', { name: /Задача 1/ }).focus()
+      await user.keyboard('e')
+
+      const textarea = screen.getByRole('textbox', { name: 'Текст задачи' })
+      const editor = textarea.closest('div') as HTMLElement
+      await user.click(within(editor).getByRole('button', { name: /Срок/ }))
+      // The due-date panel has no `role="menu"` (it's a native date input plus
+      // preset buttons), so its presence is asserted through a preset instead.
+      expect(screen.getByRole('button', { name: 'Убрать срок' })).toBeInTheDocument()
+
+      // Tab (not ArrowDown — this panel has no arrow-key navigation) moves
+      // focus from the date input to the first preset, «Сегодня».
+      await user.tab()
+      await user.keyboard('{Enter}')
+
+      expect(screen.queryByRole('button', { name: 'Убрать срок' })).not.toBeInTheDocument()
+      expect(screen.getByRole('textbox', { name: 'Текст задачи' })).toBeInTheDocument()
+      // The popup didn't just swallow Enter: the picked value actually landed on the draft.
+      expect(within(editor).getByRole('button', { name: 'Сегодня' })).toBeInTheDocument()
     })
 
     it('Enter in the textarea saves; the global keys stay quiet while typing there', async () => {

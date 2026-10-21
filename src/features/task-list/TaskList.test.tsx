@@ -330,6 +330,19 @@ describe('TaskList', () => {
       expect(screen.getByRole('status')).toHaveTextContent('Изменения сохранены: «Купить хлеб»')
     })
 
+    // Criterion 5 names four entry points into the editor: E, double-click, the
+    // edit button and the "Изменить" menu item. The row menu item is covered in
+    // the "mobile row menu button" describe block below; this is the desktop
+    // edit `IconButton`, the one other entry point with no click-through test.
+    it('opens the editor from the desktop edit button, not just double-click', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      await user.click(screen.getByRole('button', { name: 'Изменить задачу: Купить молоко' }))
+
+      expect(screen.getByRole('textbox', { name: 'Текст задачи' })).toBeInTheDocument()
+    })
+
     it('rolls back all three fields on Отмена, leaving the task untouched', async () => {
       const user = userEvent.setup()
       renderTaskList([makeTask({ id: 't1', title: 'Купить молоко', priority: 'low', dueDate: null })])
@@ -1116,6 +1129,19 @@ describe('TaskList', () => {
       expect(screen.getByRole('menuitem', { name: 'Удалить' })).toBeInTheDocument()
     })
 
+    // Criterion 5's fourth entry point into the editor, alongside E,
+    // double-click and the desktop edit button (the other three are covered
+    // elsewhere in this file).
+    it('opens the editor from the "Изменить" menu item', async () => {
+      const user = userEvent.setup()
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      await user.click(screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ }))
+      await user.click(screen.getByRole('menuitem', { name: 'Изменить' }))
+
+      expect(screen.getByRole('textbox', { name: 'Текст задачи' })).toBeInTheDocument()
+    })
+
     it('meets the 44×44 mobile touch target (design-spec 3.6) and names the task in the accessible name', () => {
       renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
 
@@ -1196,6 +1222,38 @@ describe('TaskList', () => {
       fireEvent.touchEnd(row, { changedTouches: [{ clientX: 200, clientY: 50 }] })
 
       expect(screen.getByRole('menu')).toBeInTheDocument()
+    })
+
+    it('reflects menu state on the mobile "more" button aria-expanded (FELA-175 regression)', () => {
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ })
+      expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+
+      fireEvent.click(moreButton)
+      expect(moreButton).toHaveAttribute('aria-expanded', 'true')
+
+      fireEvent.click(moreButton)
+      expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+    })
+  })
+
+  describe('desktop row menu button aria-expanded (FELA-175 regression)', () => {
+    beforeEach(() => {
+      stubMatchMedia(true)
+    })
+
+    it('reflects menu state on the desktop "more" button aria-expanded', () => {
+      renderTaskList([makeTask({ id: 't1', title: 'Купить молоко' })])
+
+      const moreButton = screen.getByRole('button', { name: /Действия с задачей: Купить молоко/ })
+      expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+
+      fireEvent.click(moreButton)
+      expect(moreButton).toHaveAttribute('aria-expanded', 'true')
+
+      fireEvent.click(moreButton)
+      expect(moreButton).toHaveAttribute('aria-expanded', 'false')
     })
   })
 })
