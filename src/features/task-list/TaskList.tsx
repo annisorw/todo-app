@@ -1,11 +1,10 @@
-import { AnimatePresence } from 'framer-motion'
+import { AnimatePresence, Reorder } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 import { EmptyState } from '../../components/EmptyState'
 import { toDateKey } from '../../domain/dueDate'
 import type { Filter, TaskView } from '../../domain/filters'
 import { isDone } from '../../domain/task'
 import type { Task, TaskPatch } from '../../domain/task'
-import { announce } from '../../lib/announce'
 import { useRowShortcuts } from '../shortcuts/useRowShortcuts'
 import { useToast } from '../../state/useToast'
 import { useTaskStore } from '../../state/useTaskStore'
@@ -13,6 +12,7 @@ import { FILTER_LABELS } from '../toolbar/filterLabels'
 import { CompletedSection } from './CompletedSection'
 import { TaskRow } from './TaskRow'
 import { useRovingFocus } from './useRovingFocus'
+import { useTaskReorder } from './useTaskReorder'
 
 const SETTLE_DELAY_MS = 600
 
@@ -158,6 +158,7 @@ export function TaskList({
 
   const activeIds = displayActive.map((task) => task.id)
   const roving = useRovingFocus(activeIds)
+  const reorder = useTaskReorder({ tasks, ids: activeIds, moveTask })
 
   function handleSave(id: string, patch: TaskPatch) {
     editTask(id, patch)
@@ -197,43 +198,18 @@ export function TaskList({
     })
   }
 
-  /**
-   * `Ctrl/Cmd+↑`/`↓` — design-spec 6.4's «альтернатива без режима». The step
-   * is one *visible* neighbour, so a filtered or searched list moves the row
-   * past what the user can actually see; the store index that `task/move`
-   * wants is then looked up from that neighbour. No wrap-around: a move that
-   * silently teleported the first row to the bottom is a different gesture
-   * from "one step".
-   */
-  function moveRow(taskId: string, delta: -1 | 1) {
-    const visibleIndex = displayActive.findIndex((task) => task.id === taskId)
-    // `findIndex` misses with `-1` and `displayActive[-1]` is `undefined`, so
-    // one guard covers both «строки нет в этой группе» and the lookup — and
-    // the row found here is the one announced below, not a second search.
-    const moved = displayActive[visibleIndex]
-    if (moved === undefined) return
-
-    const neighbour = displayActive[visibleIndex + delta]
-    if (neighbour === undefined) return
-
-    const from = tasks.findIndex((task) => task.id === taskId)
-    const to = tasks.findIndex((task) => task.id === neighbour.id)
-    if (from === -1 || to === -1) return
-
-    moveTask(from, to)
-    announce(
-      `Задача «${moved.title}» перемещена на позицию ${String(visibleIndex + delta + 1)} из ${String(displayActive.length)}`,
-    )
-  }
-
   // One declaration for both row groups (design-spec 6.3, row-scoped half).
+  // The key belongs to this hook — FELA-20 owns all of 6.3 — while the order
+  // it writes belongs to `useTaskReorder.moveRow`: the one writer the pointer
+  // drag and both keyboard paths go through, so «на какую позицию» has a
+  // single answer (review R1).
   const handleRowKeyDown = useRowShortcuts({
     openEditor: setEditingId,
     removeTask: (taskId) => {
       const task = tasks.find((candidate) => candidate.id === taskId)
       if (task !== undefined) handleRemove(task)
     },
-    moveTask: moveRow,
+    moveTask: reorder.moveRow,
   })
 
   return (
@@ -253,7 +229,14 @@ export function TaskList({
           <EmptyState variant="no-active" />
         )
       ) : (
-        <ul aria-label="Задачи" className="flex flex-col gap-(--space-1)">
+        <Reorder.Group
+          as="ul"
+          axis="y"
+          values={activeIds}
+          onReorder={reorder.handleReorder}
+          aria-label="Задачи"
+          className="flex flex-col gap-(--space-1)"
+        >
           <AnimatePresence initial={false}>
             {displayActive.map((task) => (
               <TaskRow
@@ -275,10 +258,24 @@ export function TaskList({
                 onSave={(patch) => handleSave(task.id, patch)}
                 onRemove={() => handleRemove(task)}
                 onQuickChange={(patch) => editTask(task.id, patch)}
+                reorder={{
+                  value: task.id,
+                  isMovable: !isDone(task),
+                  isGrabbed: reorder.grabbedId === task.id,
+                  // Grab mode gets the key first and `preventDefault`s what it
+                  // uses; whatever it leaves alone bubbles on to the row's
+                  // `useRowShortcuts`, which skips an already handled event.
+                  // So `Ctrl/Cmd+↑`/`↓` works from the handle too, and a held
+                  // row's plain `↑`/`↓` never reaches the roving focus move.
+                  onHandleKeyDown: (event) => reorder.handleHandleKeyDown(event, task.id),
+                  onHandleBlur: () => reorder.handleHandleBlur(task.id),
+                  onDragStart: () => reorder.handleDragStart(task.id),
+                  onDragEnd: reorder.handleDragEnd,
+                }}
               />
             ))}
           </AnimatePresence>
-        </ul>
+        </Reorder.Group>
       )}
 
       <CompletedSection

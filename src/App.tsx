@@ -73,7 +73,7 @@ function AppBody() {
           progressSlot={isFirstRun ? undefined : <ProgressRing completed={completedCount} total={tasks.length} />}
         />
         <ErrorBanner />
-        <Composer ref={composerRef} />
+        <Composer ref={composerRef} filter={toolbar.filter} />
         {isFirstRun ? (
           <EmptyState variant="first-run" onAddTask={() => composerRef.current?.requestNewTask()} />
         ) : (
