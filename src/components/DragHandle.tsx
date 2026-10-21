@@ -9,7 +9,7 @@ export interface DragHandleProps extends ComponentPropsWithoutRef<'button'> {
 
 function GripIcon() {
   return (
-    <svg viewBox="0 0 16 16" className="size-4" fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 16 16" className="size-5" fill="currentColor" aria-hidden="true">
       <circle cx="5" cy="3" r="1.25" />
       <circle cx="11" cy="3" r="1.25" />
       <circle cx="5" cy="8" r="1.25" />
