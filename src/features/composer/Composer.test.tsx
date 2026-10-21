@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
-import { fireEvent } from '@testing-library/react'
+import { act, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { createRef } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { LiveRegion } from '../../components/LiveRegion'
 import { MAX_TITLE_LENGTH, TITLE_COUNTER_THRESHOLD } from '../../domain/limits'
@@ -8,6 +9,7 @@ import { TaskStoreProvider } from '../../state/TaskStoreProvider'
 import { useTaskStore } from '../../state/useTaskStore'
 import { stubMatchMedia } from '../../test/matchMedia'
 import { Composer } from './Composer'
+import type { ComposerHandle } from './Composer'
 
 function TaskTitles() {
   const { tasks } = useTaskStore()
@@ -195,6 +197,53 @@ describe('Composer', () => {
     const fieldBox = field.closest('[class*="radius-md"]')
     expect(fieldBox).not.toBeNull()
     expect(fieldBox).toHaveClass('border-danger', 'shadow-glow-accent')
+  })
+})
+
+/**
+ * design-spec S2 — the `first-run` `EmptyState`'s "Добавить первую задачу"
+ * action calls this handle. Desktop has a visible field to focus directly;
+ * mobile doesn't (it's `Fab` + a sheet), so there `focus()` opens the sheet
+ * instead, which autofocuses its own field already (no further wiring
+ * needed there).
+ */
+describe('Composer imperative handle', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('desktop: focuses the panel field directly', () => {
+    stubMatchMedia(true)
+    const ref = createRef<ComposerHandle>()
+    render(
+      <TaskStoreProvider>
+        <Composer ref={ref} />
+      </TaskStoreProvider>,
+    )
+
+    act(() => {
+      ref.current?.focus()
+    })
+
+    expect(screen.getByRole('textbox', { name: 'Текст новой задачи' })).toHaveFocus()
+  })
+
+  it('mobile: opens the sheet instead of focusing the (hidden) panel field', () => {
+    stubMatchMedia(false)
+    const ref = createRef<ComposerHandle>()
+    render(
+      <TaskStoreProvider>
+        <Composer ref={ref} />
+      </TaskStoreProvider>,
+    )
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    act(() => {
+      ref.current?.focus()
+    })
+
+    expect(screen.getByRole('dialog', { name: 'Добавить задачу' })).toBeInTheDocument()
   })
 })
 

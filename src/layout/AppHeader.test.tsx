@@ -65,19 +65,25 @@ describe('AppHeader', () => {
     expect(screen.getByRole('button', { name: 'Горячие клавиши' })).toBeInTheDocument()
   })
 
-  it('opens as a plain disclosure, not a dialog', async () => {
+  it('opens ShortcutsSheet as a real modal, not a disclosure', async () => {
     const user = userEvent.setup()
     renderHeader()
 
     const trigger = screen.getByRole('button', { name: 'Горячие клавиши' })
-    expect(trigger).toHaveAttribute('aria-expanded', 'false')
-    expect(trigger).toHaveAttribute('aria-controls')
+    expect(trigger).not.toHaveAttribute('aria-expanded')
+    expect(trigger).not.toHaveAttribute('aria-controls')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
     await user.click(trigger)
 
-    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(dialog).toHaveAccessibleName('Горячие клавиши')
+
+    await user.keyboard('{Escape}')
+
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByText('Шпаргалка появится позже.')).toBeInTheDocument()
+    expect(trigger).toHaveFocus()
   })
 })
 

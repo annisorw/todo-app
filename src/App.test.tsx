@@ -40,11 +40,44 @@ describe('App', () => {
       </ThemeProvider>,
     )
 
-    expect(screen.getByRole('tabpanel')).toBeInTheDocument()
+    // First run (design-spec S2): the toolbar/list are replaced by
+    // `EmptyState first-run` until the very first task exists.
+    expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument()
 
     await user.type(screen.getByRole('textbox', { name: 'Текст новой задачи' }), 'Купить молоко')
     await user.click(screen.getByRole('button', { name: 'Добавить задачу в список' }))
 
+    expect(screen.getByRole('tabpanel')).toBeInTheDocument()
     expect(screen.getByText('Купить молоко')).toBeInTheDocument()
+  })
+
+  it('first run (design-spec S2): EmptyState replaces the list and hides the toolbar/counts', () => {
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    )
+
+    expect(screen.getByRole('heading', { name: 'Пока пусто' })).toBeInTheDocument()
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+    expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument()
+    // The composer itself stays active, per spec.
+    expect(screen.getByRole('textbox', { name: 'Текст новой задачи' })).toBeInTheDocument()
+  })
+
+  it('first run: "Добавить первую задачу" puts focus in the composer field (desktop)', async () => {
+    stubMatchMedia(true)
+    const { default: userEvent } = await import('@testing-library/user-event')
+    const user = userEvent.setup()
+
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Добавить первую задачу' }))
+
+    expect(screen.getByRole('textbox', { name: 'Текст новой задачи' })).toHaveFocus()
   })
 })
