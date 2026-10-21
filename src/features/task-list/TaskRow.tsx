@@ -28,7 +28,8 @@ const SWIPE_CANCEL_PX = 10
 
 // Motion table (design-spec section 5), the three drag rows.
 type CubicBezier = [number, number, number, number]
-const EASE_STANDARD: CubicBezier = [0.2, 0, 0, 1]
+/** `--ease-standard` (`tokens.css`). Exported — `TaskList`'s filter-switch crossfade (FELA-134) uses the same curve. */
+export const EASE_STANDARD: CubicBezier = [0.2, 0, 0, 1]
 const EASE_OUT_SOFT: CubicBezier = [0.16, 1, 0.3, 1]
 const EASE_IN_FAST: CubicBezier = [0.4, 0, 1, 1]
 const DRAG_LIFT_S = 0.14
@@ -244,6 +245,7 @@ export function TaskRow({
   const checkboxRef = useRef<HTMLInputElement>(null)
   const moreRef = useRef<HTMLButtonElement>(null)
   const moveUpRef = useRef<HTMLButtonElement>(null)
+  const handleRef = useRef<HTMLButtonElement>(null)
   const longPressTimer = useRef<number | null>(null)
   const touchStartX = useRef<number | null>(null)
   const touchStartY = useRef<number | null>(null)
@@ -354,6 +356,19 @@ export function TaskRow({
     if (moveMode) moveUpRef.current?.focus()
   }, [moveMode])
 
+  // The desktop handle keeps native focus for the whole grab — `onHandleBlur`
+  // releases it the moment that focus actually leaves. A filter switch
+  // (FELA-134's `key={filter}` crossfade) tears the row's DOM node down and
+  // rebuilds it without ever firing that blur, so a still-grabbed row would
+  // otherwise come back with `isGrabbed` on and focus dropped to `<body>` —
+  // neither held-with-focus nor honestly released. Mirrors the mobile strip's
+  // mount-focus effect above; harmless to re-run while the handle already
+  // has focus (grabbing it via `Space` on a focused handle).
+  const isGrabbed = reorder !== undefined && reorder.isGrabbed
+  useEffect(() => {
+    if (isDesktop && isGrabbed) handleRef.current?.focus()
+  }, [isDesktop, isGrabbed])
+
   /**
    * Both of 6.4's outcomes — «Готово» commits where the row stands,
    * «Отмена» (or `Esc`, its second path) puts it back — and the one focus
@@ -432,6 +447,7 @@ export function TaskRow({
       onPriorityOpenChange={setPriorityOpen}
       onDueDateOpenChange={setDueDateOpen}
       moreRef={moreRef}
+      handleRef={handleRef}
       moveMode={moveMode}
       moveUpRef={moveUpRef}
       onMoveStep={(delta) => reorder?.onStep(delta)}
@@ -666,6 +682,7 @@ interface RowBodyProps {
   onPriorityOpenChange: (open: boolean) => void
   onDueDateOpenChange: (open: boolean) => void
   moreRef: RefObject<HTMLButtonElement | null>
+  handleRef: RefObject<HTMLButtonElement | null>
   /** design-spec 6.4 — this row is held on mobile, so it shows the ↑ / ↓ / «Готово» / «Отмена» strip instead of its meta chips. */
   moveMode: boolean
   moveUpRef: RefObject<HTMLButtonElement | null>
@@ -708,6 +725,7 @@ function RowBody({
   onPriorityOpenChange,
   onDueDateOpenChange,
   moreRef,
+  handleRef,
   moveMode,
   moveUpRef,
   onMoveStep,
@@ -781,6 +799,7 @@ function RowBody({
           )}
         >
           <DragHandle
+            ref={handleRef}
             taskTitle={task.title}
             tabIndex={tabIndex}
             isDraggable

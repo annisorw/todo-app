@@ -40,9 +40,36 @@ export function useRovingFocus(ids: string[]): RovingFocus {
   const [activeId, setActiveId] = useState<string | null>(ids[0] ?? null)
   const nodes = useRef(new Map<string, HTMLElement>())
 
+  // The id whose DOM node was just torn down *while it held real focus* —
+  // e.g. `TaskList`'s filter-switch crossfade remounts the whole panel on a
+  // `key={filter}` change, so a row that stays visible across the switch
+  // still gets a brand-new DOM node (FELA-195). React detaches the old ref
+  // (`registerRef(id, null)`) before attaching the new one for the same id,
+  // so sweeping the id here and consuming it on the very next matching
+  // `registerRef(id, node)` hands focus across the remount without this
+  // hook needing to know *why* the node changed.
+  const pendingFocusId = useRef<string | null>(null)
+
   const registerRef = useCallback((id: string, node: HTMLElement | null) => {
-    if (node === null) nodes.current.delete(id)
-    else nodes.current.set(id, node)
+    if (node === null) {
+      const existing = nodes.current.get(id)
+      if (existing !== undefined && existing === document.activeElement) {
+        pendingFocusId.current = id
+      }
+      nodes.current.delete(id)
+      return
+    }
+
+    nodes.current.set(id, node)
+    if (pendingFocusId.current === id) {
+      pendingFocusId.current = null
+      // Only reclaim focus the remount actually dropped: between teardown
+      // and re-attach, focus falls to `<body>` (or nothing). If something
+      // else holds it now, the person moved it there on purpose — e.g. to
+      // the search field — and the switch back must not steal it away.
+      const active = document.activeElement
+      if (active === null || active === document.body) node.focus()
+    }
   }, [])
 
   // `activeId` can point at a row that just left `ids` (filtered out,

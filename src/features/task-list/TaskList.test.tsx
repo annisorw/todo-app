@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ErrorBanner } from '../../components/ErrorBanner'
 import { LiveRegion } from '../../components/LiveRegion'
@@ -996,6 +997,149 @@ describe('TaskList', () => {
     })
   })
 
+  describe('switching filters (design-spec §5 filter-switch, acceptance criteria 16–18, FELA-134)', () => {
+    beforeEach(() => {
+      stubMatchMedia(true)
+    })
+
+    function rerenderWithFilter(rerender: (ui: ReactElement) => void, filter: Filter) {
+      rerender(
+        <TaskStoreProvider>
+          <ToastProvider>
+            <LiveRegion />
+            <Harness filter={filter} />
+          </ToastProvider>
+        </TaskStoreProvider>,
+      )
+    }
+
+    it('hides a task that no longer matches the segment immediately, without playing its task-delete exit', () => {
+      const { rerender } = renderTaskList(
+        [
+          makeTask({ id: 't1', title: 'Активная' }),
+          makeTask({ id: 't2', title: 'Готовая', completedAt: '2026-10-20T10:00:00.000Z' }),
+        ],
+        { filter: 'all' },
+      )
+
+      expect(screen.getByText('Активная')).toBeInTheDocument()
+
+      rerenderWithFilter(rerender, 'completed')
+
+      // Pre-fix, this row left through the per-row `AnimatePresence`'s
+      // `task-delete` exit and so stayed mounted — with its collapsing-height
+      // style — for the exit's duration (see the "stale undo toast" test
+      // above for the same jsdom timing note). The filter crossfade instead
+      // unmounts the whole panel subtree directly, so it's gone the instant
+      // the segment changes.
+      expect(screen.queryByText('Активная')).not.toBeInTheDocument()
+      expect(screen.getByText('Готовая')).toBeInTheDocument()
+    })
+
+    it('shows a task newly matching the segment immediately, without replaying its task-add enter', () => {
+      const { rerender } = renderTaskList(
+        [
+          makeTask({ id: 't1', title: 'Активная' }),
+          makeTask({ id: 't2', title: 'Готовая', completedAt: '2026-10-20T10:00:00.000Z' }),
+        ],
+        { filter: 'completed' },
+      )
+
+      expect(screen.queryByText('Активная')).not.toBeInTheDocument()
+
+      rerenderWithFilter(rerender, 'all')
+
+      const row = screen.getByText('Активная').closest('li')
+      // The row-level `AnimatePresence` remounts fresh on every filter
+      // switch (it lives inside the `key={filter}` wrapper) with
+      // `initial={false}`, so a task that's merely newly *visible* mounts
+      // straight at its `animate` target instead of `task-add`'s
+      // `opacity: 0, y: -8` — synchronously true before the first
+      // animation frame, so this doesn't need fake timers to observe.
+      expect((row as HTMLElement).style.opacity).not.toBe('0')
+    })
+
+    it('keeps focus on a row that stays visible across a filter switch (FELA-195)', () => {
+      const { rerender } = renderTaskList(
+        [
+          makeTask({ id: 't1', title: 'Активная' }),
+          makeTask({ id: 't2', title: 'Готовая', completedAt: '2026-10-20T10:00:00.000Z' }),
+        ],
+        { filter: 'all' },
+      )
+
+      const checkbox = screen.getByRole('checkbox', { name: 'Активная' })
+      checkbox.focus()
+      expect(checkbox).toHaveFocus()
+
+      // 't1' stays visible under 'active' too — the row must keep (real DOM)
+      // focus, not drop it to <body>, even though the `key={filter}` switch
+      // below remounts and recreates its DOM node.
+      rerenderWithFilter(rerender, 'active')
+
+      expect(document.activeElement).not.toBe(document.body)
+      expect(screen.getByRole('checkbox', { name: 'Активная' })).toHaveFocus()
+    })
+
+    it('does not steal focus back from a deliberate move made while the row was unmounted (FELA-212)', () => {
+      function withExternalButton(filter: Filter) {
+        return (
+          <TaskStoreProvider>
+            <ToastProvider>
+              <LiveRegion />
+              <button type="button">Снаружи</button>
+              <Harness filter={filter} />
+            </ToastProvider>
+          </TaskStoreProvider>
+        )
+      }
+
+      seed([
+        makeTask({ id: 't1', title: 'Активная' }),
+        makeTask({ id: 't2', title: 'Готовая', completedAt: '2026-10-20T10:00:00.000Z' }),
+      ])
+      const { rerender } = render(withExternalButton('all'))
+
+      const checkbox = screen.getByRole('checkbox', { name: 'Активная' })
+      checkbox.focus()
+      expect(checkbox).toHaveFocus()
+
+      // 't1' is filtered out under 'completed' — its node tears down while
+      // it still holds focus, arming `pendingFocusId`.
+      rerender(withExternalButton('completed'))
+
+      // The user deliberately moves focus elsewhere — e.g. the search field
+      // or composer in the real app — before switching the segment back.
+      screen.getByRole('button', { name: 'Снаружи' }).focus()
+      expect(screen.getByRole('button', { name: 'Снаружи' })).toHaveFocus()
+
+      // 't1' remounts on the switch back to 'all'. It must not reclaim
+      // focus from where the person put it on purpose.
+      rerender(withExternalButton('all'))
+
+      expect(screen.getByRole('button', { name: 'Снаружи' })).toHaveFocus()
+    })
+
+    it('does not break roving focus or tab/tabpanel wiring across a quick filter switch', () => {
+      const { rerender } = renderTaskList(
+        [
+          makeTask({ id: 't1', title: 'Первая' }),
+          makeTask({ id: 't2', title: 'Вторая' }),
+        ],
+        { filter: 'all' },
+      )
+
+      rerenderWithFilter(rerender, 'active')
+      rerenderWithFilter(rerender, 'all')
+
+      const panel = document.getElementById('panel')
+      expect(panel).toHaveAttribute('aria-labelledby', 'tab-all')
+      const checkboxes = screen.getAllByRole('checkbox')
+      expect(checkboxes[0]).toHaveAttribute('tabindex', '0')
+      expect(checkboxes[1]).toHaveAttribute('tabindex', '-1')
+    })
+  })
+
   describe('prefers-reduced-motion (motion table, section 5 / acceptance criterion 17)', () => {
     // `stubMatchMedia` from `test/matchMedia.ts` answers every query the
     // same way, so it can't set "desktop" and "reduced motion" separately —
@@ -1067,6 +1211,10 @@ describe('TaskList', () => {
   })
 
   describe('empty states', () => {
+    beforeEach(() => {
+      stubMatchMedia(true)
+    })
+
     it('shows EmptyState no-active when the active filter has zero tasks (design-spec S5)', () => {
       renderTaskList(
         [makeTask({ id: 't1', title: 'Готово', completedAt: '2026-01-01T00:00:00.000Z' })],
