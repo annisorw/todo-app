@@ -199,6 +199,10 @@ export function TaskRow({
   const isDesktop = useMediaQuery('(min-width: 640px)')
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const [menuOpen, setMenuOpen] = useState(false)
+  // The two desktop quick-path chips own their own open state, but the row has
+  // to know about it — see `popupOpen` below for why.
+  const [priorityOpen, setPriorityOpen] = useState(false)
+  const [dueDateOpen, setDueDateOpen] = useState(false)
   // Esc (criterion in FELA-120) must return focus to whichever element actually opened
   // the menu: the gesture has no focusable origin of its own, so it keeps using the
   // row's roving-focus anchor (the checkbox); the mobile `more` button is its own anchor.
@@ -335,6 +339,8 @@ export function TaskRow({
       onToggle={onToggle}
       onOpenEditor={onOpenEditor}
       onQuickChange={onQuickChange}
+      onPriorityOpenChange={setPriorityOpen}
+      onDueDateOpenChange={setDueDateOpen}
       moreRef={moreRef}
       menuOpen={menuOpen}
       setMenuOpen={setMenuOpen}
@@ -378,7 +384,28 @@ export function TaskRow({
     </>
   )
 
-  const shellClassName = isEditing && isDesktop ? undefined : 'relative'
+  // `backdrop-filter` on `.task-row` (3.11, fallback block 2.7) makes the row
+  // its own stacking context, so every `--z-dropdown` *inside* the row is
+  // scoped to the row and paints under the next row instead of over it.
+  // Three popups live in there: the row `Menu` on both breakpoints, and on
+  // desktop the `PrioritySelect` menu (3.12) and the `DueDatePicker` panel
+  // (3.13, 224px wide and taller than the row). The row has to be raised
+  // while *any* of them is open — measured with `elementFromPoint` in the
+  // overlap, not reasoned about. `--z-content` and not `--z-dropdown`: the
+  // row must stay below the sticky toolbar (2.9).
+  const popupOpen = menuOpen || priorityOpen || dueDateOpen
+
+  // The chips unmount when the desktop editor replaces the row body, or when
+  // the viewport drops to the mobile static chips, and an unmount is not a
+  // close — without this the row would stay raised with nothing open.
+  const chipsMounted = isDesktop && !isEditing
+  useEffect(() => {
+    if (chipsMounted) return
+    setPriorityOpen(false)
+    setDueDateOpen(false)
+  }, [chipsMounted])
+
+  const shellClassName = isEditing && isDesktop ? undefined : cn('relative', popupOpen && 'z-(--z-content)')
 
   // The reorderable row's share of `task-add`/`task-delete` — see the
   // comment on the wrapper below. Reduced motion keeps opacity only, so
@@ -444,7 +471,7 @@ export function TaskRow({
               { opacity: 0, x: 12, height: 0, transition: EXIT_TRANSITION }
         }
         transition={prefersReducedMotion ? { duration: 0.12 } : ENTER_TRANSITION}
-        className="relative"
+        className={shellClassName}
       >
         {children}
       </motion.li>
@@ -534,6 +561,9 @@ interface RowBodyProps {
   onToggle: () => void
   onOpenEditor: () => void
   onQuickChange: (patch: TaskPatch) => void
+  /** Reported back up so the row can out-stack the next row while a chip popup is open. */
+  onPriorityOpenChange: (open: boolean) => void
+  onDueDateOpenChange: (open: boolean) => void
   moreRef: RefObject<HTMLButtonElement | null>
   menuOpen: boolean
   setMenuOpen: (value: boolean) => void
@@ -568,6 +598,8 @@ function RowBody({
   onToggle,
   onOpenEditor,
   onQuickChange,
+  onPriorityOpenChange,
+  onDueDateOpenChange,
   moreRef,
   menuOpen,
   setMenuOpen,
@@ -597,11 +629,21 @@ function RowBody({
       className={cn(
         'task-row group flex min-h-(--layout-row-h) items-center gap-(--space-3) rounded-(--radius-lg) border px-(--space-2) transition-colors duration-(--duration-fast) ease-standard',
         // S8: an opaque fill, because a translucent card in flight reads
-        // dirty over the rows it passes. The hover/focus tint has to go with
+        // dirty over the rows it passes — so the lifted row drops both the
+        // `surface-1` tint and the blur. The hover/focus tint has to go with
         // it — it is a later-ordered variant and would win otherwise.
+        //
+        // In `default` the row owns a surface, per design-spec 3.11 and the
+        // `--color-surface-1` row of the 2.1/2.2 colour tables («карточка,
+        // строка, инпут»). `hover`/`focus-within` lift it to
+        // `--color-surface-2`; without a surface underneath, that "lift" reads
+        // as "appear", and on touch — where there is no hover at all — the
+        // list loses every row boundary. `.task-row` is also already listed in
+        // the mandatory 2.7 fallback block, which only makes sense for an
+        // element that really applies `backdrop-filter`.
         lifted
           ? 'border-accent bg-surface-2-solid shadow-drag'
-          : 'border-transparent bg-transparent hover:bg-surface-2 focus-within:bg-surface-2',
+          : 'border-surface-border bg-surface-1 shadow-xs backdrop-blur-(--blur-surface) hover:bg-surface-2 focus-within:bg-surface-2',
         isOverdue && 'text-overdue',
       )}
     >
@@ -645,6 +687,7 @@ function RowBody({
             <PrioritySelect
               value={task.priority}
               onChange={(priority) => onQuickChange({ priority })}
+              onOpenChange={onPriorityOpenChange}
               tabIndex={tabIndex}
             />
           ) : (
@@ -660,6 +703,7 @@ function RowBody({
               <DueDatePicker
                 value={task.dueDate}
                 onChange={(dueDate) => onQuickChange({ dueDate })}
+                onOpenChange={onDueDateOpenChange}
                 tabIndex={tabIndex}
               />
             </span>
